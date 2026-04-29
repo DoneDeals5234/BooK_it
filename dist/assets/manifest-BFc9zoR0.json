@@ -1,0 +1,37 @@
+{
+  "name": "Book it - Barber Shop Booking",
+  "short_name": "Book it",
+  "description": "Find the perfect barber shop near you and book your appointment",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0ea5e9",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "https://cdn.builder.io/api/v1/image/assets%2F467c909e774d464b805589214981ffd5%2F42fddbc9bf0f4d1cb82a4e2025f8b0e0?format=webp&width=192",
+      "sizes": "192x192",
+      "type": "image/webp",
+      "purpose": "any"
+    },
+    {
+      "src": "https://cdn.builder.io/api/v1/image/assets%2F467c909e774d464b805589214981ffd5%2F42fddbc9bf0f4d1cb82a4e2025f8b0e0?format=webp&width=512",
+      "sizes": "512x512",
+      "type": "image/webp",
+      "purpose": "any"
+    },
+    {
+      "src": "https://cdn.builder.io/api/v1/image/assets%2F467c909e774d464b805589214981ffd5%2F42fddbc9bf0f4d1cb82a4e2025f8b0e0?format=webp&width=192",
+      "sizes": "192x192",
+      "type": "image/webp",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "https://cdn.builder.io/api/v1/image/assets%2F467c909e774d464b805589214981ffd5%2F42fddbc9bf0f4d1cb82a4e2025f8b0e0?format=webp&width=540",
+      "sizes": "540x720",
+      "type": "image/webp"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "command": "npm run dev",
+  "serverUrl": " http://10.135.174.146:5173/",
+  "authenticateProxy": false,
+  "commitMode": "commits",
+  "autoDetectDevServer": true
+}

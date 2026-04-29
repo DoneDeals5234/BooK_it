@@ -1,0 +1,194 @@
+/* Video Card Container - Mobile Optimized with Smooth Scrolling */
+.short-videos-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+  scroll-behavior: smooth;
+}
+
+/* GPU acceleration for smooth video transitions */
+.video-card {
+  will-change: transform, opacity;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+/* Touch action for smooth scrolling on mobile */
+@media (max-width: 768px) {
+  .short-videos-container {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Video containers for mobile */
+  .video-card {
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+    will-change: transform, opacity;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  /* Prevent text selection in video player area */
+  video {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  /* Action buttons optimization for touch */
+  .video-action-button {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 8px;
+    border-radius: 8px;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Text optimization for mobile */
+  .video-uploader-name {
+    line-height: 1.2;
+    word-break: break-word;
+  }
+
+  /* Overlay optimization */
+  .video-info-overlay {
+    background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.7) 60%, rgba(0, 0, 0, 0.9) 100%);
+  }
+
+  /* Prevent landscape issues */
+  .landscape-lock {
+    aspect-ratio: 9 / 16;
+  }
+}
+
+/* Desktop view optimizations */
+@media (min-width: 769px) {
+  .video-card {
+    border-radius: 16px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  }
+}
+
+/* Smooth scrolling for better UX */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Prevent horizontal scrollbar on iOS */
+body {
+  position: fixed;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* Handle safe area insets for notched devices */
+@supports (padding: max(0px)) {
+  .short-videos-container {
+    padding-left: max(0px, env(safe-area-inset-left));
+    padding-right: max(0px, env(safe-area-inset-right));
+    padding-top: max(0px, env(safe-area-inset-top));
+    padding-bottom: max(0px, env(safe-area-inset-bottom));
+  }
+}
+
+/* Video loading state */
+.video-loading {
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.video-loading::after {
+  content: '';
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: white;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Fade transition between cards */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+/* Smooth fade out for loading spinner */
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.animate-fadeOut {
+  animation: fadeOut 0.5s ease-in-out forwards;
+}
+
+.video-transition {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+/* Swipe hint for users (optional) */
+.swipe-hint {
+  position: absolute;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+  text-align: center;
+  pointer-events: none;
+  animation: fadeInOut 3s ease-in-out infinite;
+  display: none; /* Hidden by default */
+}
+
+@keyframes fadeInOut {
+  0%, 100% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 768px) and (prefers-reduced-motion: no-preference) {
+  .swipe-hint {
+    display: block;
+  }
+}
+
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

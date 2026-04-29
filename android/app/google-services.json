@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "1091592092089",
+    "firebase_url": "https://barber-app-6993a-default-rtdb.firebaseio.com",
+    "project_id": "barber-app-6993a",
+    "storage_bucket": "barber-app-6993a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1091592092089:android:03dad6d101f55c9beade68",
+        "android_client_info": {
+          "package_name": "com.bookbarber.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1091592092089-4v4ii2ksskjed4m4cr70qij3g0snga97.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBlNQtRU_EmLGeUzcspfGNi4Hr1H3sdDqU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1091592092089-4v4ii2ksskjed4m4cr70qij3g0snga97.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
