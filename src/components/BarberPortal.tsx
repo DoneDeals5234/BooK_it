@@ -40,7 +40,8 @@ import {
   Edit,
   X,
   Mail,
-  Store
+  Store,
+  Package
 } from 'lucide-react';
 import { getShops, updateShop, getShopById } from '@/lib/shops-storage';
 import { formatIST } from '@/lib/utils';

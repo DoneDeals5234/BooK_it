@@ -284,6 +284,8 @@ export const StaffPortal = ({ onClose }: StaffPortalProps) => {
   const [updateLoading, setUpdateLoading] = useState(false);
   const [updateMessage, setUpdateMessage] = useState('');
   const [uploadingApk, setUploadingApk] = useState(false);
+  const [password, setPassword] = useState('');
+  const [isAuthorized, setIsAuthorized] = useState(false);
 
   const { user } = useAuth();
 
@@ -531,6 +533,73 @@ export const StaffPortal = ({ onClose }: StaffPortalProps) => {
     },
     {} as Record<string, Shop[]>
   );
+
+  const handlePasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (password === '52345234') {
+      setIsAuthorized(true);
+      toast.success('Access Granted');
+    } else {
+      toast.error('Invalid Password!');
+      onClose();
+    }
+  };
+
+  if (!isAuthorized) {
+    return (
+      <div className="fixed inset-0 bg-slate-950 z-[100] flex items-center justify-center p-4 overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(59,130,246,0.1),transparent_50%)]" />
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.9, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          className="w-full max-w-sm relative z-10"
+        >
+          <Card className="border-0 shadow-2xl bg-white/10 backdrop-blur-xl rounded-[2.5rem] overflow-hidden">
+            <CardHeader className="text-center pt-10 pb-6">
+              <div className="w-20 h-20 bg-blue-500/20 rounded-3xl flex items-center justify-center mx-auto mb-6 rotate-12 group hover:rotate-0 transition-transform duration-500">
+                <Store className="h-10 w-10 text-blue-400" />
+              </div>
+              <CardTitle className="text-3xl font-black text-white tracking-tight">Staff Portal</CardTitle>
+              <CardDescription className="text-blue-200/60 font-medium">Authentication required</CardDescription>
+            </CardHeader>
+            <CardContent className="px-8 pb-10">
+              <form onSubmit={handlePasswordSubmit} className="space-y-5">
+                <div className="space-y-2">
+                  <Input 
+                    type="password" 
+                    placeholder="Enter Access Key" 
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    autoFocus
+                    className="h-14 rounded-2xl bg-white/5 border-white/10 text-white placeholder:text-white/20 text-center text-xl font-bold tracking-[0.5em] focus:ring-2 focus:ring-blue-500/50 transition-all"
+                  />
+                </div>
+                <div className="flex flex-col gap-3 pt-2">
+                  <Button 
+                    type="submit" 
+                    className="h-14 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-black text-sm uppercase tracking-widest shadow-lg shadow-blue-600/20 active:scale-[0.98] transition-all"
+                  >
+                    Authorize Access
+                  </Button>
+                  <Button 
+                    type="button" 
+                    variant="ghost" 
+                    onClick={onClose} 
+                    className="h-12 rounded-xl text-white/40 hover:text-white hover:bg-white/5 font-bold transition-all"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+          <p className="text-center mt-8 text-white/20 text-[10px] font-black uppercase tracking-[0.3em]">
+            Secure Administrative Environment
+          </p>
+        </motion.div>
+      </div>
+    );
+  }
 
 
 

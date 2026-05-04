@@ -65,12 +65,20 @@ serve(async (req) => {
       }
     }
 
-    // 2. Insert the order
+    // 2. Fetch shop data for notification and snapshot
+    const { data: shopData } = await supabase
+      .from('shops')
+      .select('owner_email, name')
+      .eq('id', shopId)
+      .single();
+
+    // 3. Insert the order
     const { data: order, error } = await supabase
       .from('orders')
       .insert([
         {
           shop_id: shopId,
+          shop_name: shopData?.name || 'Shop',
           customer_id: customerId,
           customer_name: customerName,
           customer_phone: customerPhone,
@@ -124,12 +132,6 @@ serve(async (req) => {
       });
 
       // 2. Notify Shop Owner (The "Ringing" Alert)
-      const { data: shopData } = await supabase
-        .from('shops')
-        .select('owner_email, name')
-        .eq('id', shopId)
-        .single();
-
       if (shopData?.owner_email) {
         const { data: profileData } = await supabase
           .from('user_profiles')

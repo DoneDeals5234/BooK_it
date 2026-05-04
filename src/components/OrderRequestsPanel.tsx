@@ -30,8 +30,8 @@ export const OrderRequestsPanel = ({ shopId }: OrderRequestsPanelProps) => {
   const [showOtpModal, setShowOtpModal] = useState(false);
 
   useEffect(() => {
-    loadOrders();
-    const interval = setInterval(loadOrders, 5000);
+    loadOrders(false); // Initial load with spinner
+    const interval = setInterval(() => loadOrders(true), 5000); // Background refreshes without spinner
     return () => clearInterval(interval);
   }, [shopId]);
 
@@ -56,8 +56,9 @@ export const OrderRequestsPanel = ({ shopId }: OrderRequestsPanelProps) => {
     }
   }, [selectedStatus, orders, activeTab]);
 
-  const loadOrders = async () => {
+  const loadOrders = async (isBackground = false) => {
     try {
+      if (!isBackground) setLoading(true);
       const allOrders = await getAllOrdersForShop(shopId);
       
       // Get all order IDs to fetch printing details in one go
@@ -72,8 +73,9 @@ export const OrderRequestsPanel = ({ shopId }: OrderRequestsPanelProps) => {
       setOrders(ordersWithPrinting);
     } catch (error) {
       console.error('Error loading orders:', error);
+      if (!isBackground) toast.error('Failed to load orders. Please refresh.');
     } finally {
-      setLoading(false);
+      if (!isBackground) setLoading(false);
     }
   };
 
@@ -186,15 +188,24 @@ export const OrderRequestsPanel = ({ shopId }: OrderRequestsPanelProps) => {
 
   const getTabOrders = () => {
     if (activeTab === 'pickup-orders') {
-      return orders.filter(o => o.delivery_type === 'pickup' && (!o.customer_address || o.customer_address === 'PICKUP FROM SHOP'));
-    }
-    if (activeTab === 'self-delivery') {
+      // Show orders that are pickup and haven't had a delivery choice made
       return orders.filter(o => 
-        (o.delivery_type === 'delivery' || (o.customer_address && o.customer_address !== 'PICKUP FROM SHOP')) && 
-        (o.delivery_choice === 'self' || !o.delivery_choice)
+        (o.delivery_type === 'pickup' || !o.delivery_type) && 
+        !o.delivery_choice
       );
     }
-    if (activeTab === 'book-it') return orders.filter(o => o.delivery_choice === 'book_it');
+    if (activeTab === 'self-delivery') {
+      // Show orders where owner explicitly chose self delivery 
+      // OR it's a delivery order that hasn't had a choice yet
+      return orders.filter(o => 
+        o.delivery_choice === 'self' || 
+        (o.delivery_type === 'delivery' && !o.delivery_choice)
+      );
+    }
+    if (activeTab === 'book-it') {
+      // Show orders where owner explicitly chose book_it
+      return orders.filter(o => o.delivery_choice === 'book_it');
+    }
     return orders;
   };
 
