@@ -5,6 +5,7 @@ import android.app.DownloadManager
 import android.app.PendingIntent
 import android.content.*
 import android.net.Uri
+import org.json.JSONArray
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
@@ -412,6 +413,69 @@ class MainActivity : BridgeActivity() {
                     Log.e(TAG, "📍 Error getting location", e)
                     this@MainActivity.bridge.triggerJSEvent("locationError", "document", "{\"message\": \"${e.message}\"}")
                 }
+        }
+
+        @JavascriptInterface
+        fun downloadImagesToGallery(urlsJson: String) {
+            try {
+                Log.d(TAG, "📥 downloadImagesToGallery called with: $urlsJson")
+                val urls = JSONArray(urlsJson)
+                val downloadManager = this@MainActivity.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+                
+                // On Android 10+ (API 29+), we don't need WRITE_EXTERNAL_STORAGE for DownloadManager 
+                // to save to public directories like DIRECTORY_PICTURES
+                
+                for (i in 0 until urls.length()) {
+                    val url = urls.getString(i)
+                    val uri = Uri.parse(url)
+                    
+                    // Extract extension or default to png
+                    val extension = if (url.contains(".jpg") || url.contains(".jpeg")) "jpg" else "png"
+                    val fileName = "bookit_order_${System.currentTimeMillis()}_$i.$extension"
+                    
+                    val request = DownloadManager.Request(uri)
+                        .setTitle("Order Image ${i + 1}")
+                        .setDescription("Saving to Book It Gallery folder")
+                        .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                        .setDestinationInExternalPublicDir(Environment.DIRECTORY_PICTURES, "BookItOrders/$fileName")
+                        .setAllowedOverMetered(true)
+                        .setAllowedOverRoaming(true)
+                    
+                    downloadManager.enqueue(request)
+                }
+                
+                this@MainActivity.runOnUiThread {
+                    Toast.makeText(this@MainActivity, "Downloading ${urls.length()} images to 'Pictures/BookItOrders' folder", Toast.LENGTH_LONG).show()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error downloading images", e)
+                this@MainActivity.runOnUiThread {
+                    Toast.makeText(this@MainActivity, "Download failed: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun downloadAndInstallApk(url: String) {
+            try {
+                Log.d(TAG, "📥 downloadAndInstallApk called: $url")
+                val uri = Uri.parse(url)
+                val downloadManager = this@MainActivity.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+                
+                val request = DownloadManager.Request(uri)
+                    .setTitle("App Update")
+                    .setDescription("Downloading latest version of Book It")
+                    .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                    .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "bookit_update.apk")
+                
+                downloadManager.enqueue(request)
+                
+                this@MainActivity.runOnUiThread {
+                    Toast.makeText(this@MainActivity, "Downloading update... check notifications", Toast.LENGTH_LONG).show()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error downloading APK", e)
+            }
         }
     }
 

@@ -15,13 +15,14 @@ import HomePage from '@/components/HomePage';
 import { ShopDetailsPage } from '@/components/ShopDetailsPage';
 
 // Lazy load heavy components
-const StaffPortal = lazy(() => import('@/components/StaffPortal').then(m => ({ default: m.StaffPortal })));
-const BarberPortal = lazy(() => import('@/components/BarberPortal').then(m => ({ default: m.BarberPortal })));
+import { StaffPortal } from '@/components/StaffPortal';
+import { BarberPortal } from '@/components/BarberPortal';
 const ProfilePage = lazy(() => import('@/components/ProfilePage').then(m => ({ default: m.ProfilePage })));
 const ShortVideosPage = lazy(() => import('@/components/ShortVideosPage'));
 const CreateShopPage = lazy(() => import('@/components/CreateShopPage').then(m => ({ default: m.CreateShopPage })));
 const WorldChatPage = lazy(() => import('@/components/WorldChatPage'));
 const OffersListPage = lazy(() => import('@/components/OffersListPage').then(m => ({ default: m.OffersListPage })));
+const CartPage = lazy(() => import('@/components/CartPage'));
 
 import { BookingModalNew } from '@/components/BookingModalNew';
 import { CategoryShopsPage } from '@/components/CategoryShopsPage';
@@ -59,7 +60,7 @@ function AppContentInner() {
   const { profile } = useUserProfile();
   const { isInitializing } = useOneSignal();
   const { activeReminder, setActiveReminder } = useReminderAlarm();
-  
+
   // Initialize device back button handler
   useDeviceBackButton({
     onBackPressed: () => {
@@ -94,7 +95,7 @@ function AppContentInner() {
     const handleNotificationClick = (event: any) => {
       console.log('🔔 App-level notification click handler:', event.detail);
       const data = event.detail?.notification?.data;
-      
+
       if (data && data.type === 'offer' && data.shopId) {
         console.log('🚀 Deep linking to shop offers:', data.shopId);
         navigate(`/shop/${data.shopId}`);
@@ -278,9 +279,9 @@ function AppContentInner() {
       <ReminderToast reminder={activeReminder} onYes={handleReminderYes} onNo={handleReminderNo} />
 
 
-      <ConfirmExitDialog 
-        open={showExitDialog} 
-        onOpenChange={setShowExitDialog} 
+      <ConfirmExitDialog
+        open={showExitDialog}
+        onOpenChange={setShowExitDialog}
         onConfirm={async () => {
           await CapacitorApp.exitApp();
         }}
@@ -315,7 +316,7 @@ function AppContentInner() {
           } />
 
           <Route path="/staff" element={<StaffPortal onClose={() => navigate('/')} />} />
-          
+
           <Route path="/portal" element={
             <BarberPortal
               onClose={() => navigate('/')}
@@ -366,6 +367,7 @@ function AppContentInner() {
 
           <Route path="/product/:productId" element={<ProductDetailsPage />} />
           <Route path="/offers-list" element={<OffersListPage />} />
+          <Route path="/cart" element={<CartPage />} />
         </Routes>
       </Suspense>
     </div>
@@ -402,7 +404,7 @@ function ConfirmExitDialog({ open, onOpenChange, onConfirm }: { open: boolean, o
               <LogOut className="h-10 w-10 text-white" />
             </div>
           </div>
-          
+
           <div className="space-y-2">
             <DialogTitle className="text-2xl font-black text-white text-center">Really Exit?</DialogTitle>
             <DialogDescription className="text-slate-300 text-center text-base font-medium">
@@ -411,14 +413,14 @@ function ConfirmExitDialog({ open, onOpenChange, onConfirm }: { open: boolean, o
           </div>
 
           <div className="flex gap-3 pt-2">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               className="flex-1 h-12 rounded-2xl border-white/20 bg-transparent text-white hover:bg-white/10 font-bold transition-all"
               onClick={() => onOpenChange(false)}
             >
               No, Stay
             </Button>
-            <Button 
+            <Button
               className="flex-1 h-12 rounded-2xl bg-white text-slate-900 hover:bg-slate-100 font-bold shadow-xl transition-all active:scale-95"
               onClick={onConfirm}
             >

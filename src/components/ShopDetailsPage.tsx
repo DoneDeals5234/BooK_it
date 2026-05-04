@@ -8,11 +8,13 @@ import { getUserProfile, type UserProfile } from '@/lib/supabase-user-profiles';
 import { getReviewsForShop, hasUserReviewedShop, type Review } from '@/lib/supabase-reviews';
 import { getFeaturedProductsByShopId, type FeaturedProduct } from '@/lib/supabase-featured-products';
 import { getActiveOffersByShopId } from '@/lib/supabase-offers';
+import { formatIST } from '@/lib/utils';
 import { ReviewForm } from '@/components/ReviewForm';
 import { ReviewsList } from '@/components/ReviewsList';
 import { ReviewReplyForm } from '@/components/ReviewReplyForm';
 import { TemporaryChatSection } from '@/components/TemporaryChatSection';
 import { ShopCustomizer } from '@/components/ShopCustomizer';
+import { DocumentPrintingSection } from './DocumentPrintingSection';
 import { BookingModalNew } from '@/components/BookingModalNew';
 import { OrderAmountModal } from '@/components/OrderAmountModal';
 import { ReminderAlertDialog } from '@/components/ReminderAlertDialog';
@@ -489,6 +491,17 @@ export const ShopDetailsPage = ({
           </div>
 
 
+          {/* Document Printing Section */}
+          {customization?.enabledFeatures.showPrinting && (
+            <DocumentPrintingSection 
+              shopId={shopId} 
+              shopName={shop.name} 
+              shopLat={shop.latitude}
+              shopLng={shop.longitude}
+              shopMapLink={shop.locationMapLink}
+            />
+          )}
+
           {/* Barber Members / Location Section */}
           {shop.barberMembers.length > 0 && customization?.enabledFeatures.showTeam && (
             <div className="space-y-3">
@@ -738,7 +751,7 @@ export const ShopDetailsPage = ({
                             {offer.discountPercentage ? `${offer.discountPercentage}% OFF` : `₹${offer.discountAmount?.toFixed(0)} OFF`}
                           </div>
                           <div className="text-xs text-orange-600 font-medium">
-                            Expires: {new Date(offer.validUntil).toLocaleDateString()}
+                            Expires: {formatIST(offer.validUntil, false)}
                           </div>
                         </div>
 

@@ -4,7 +4,8 @@ import { ChevronLeft, Star, ShoppingBag, Store, Navigation, MessageCircle, Heart
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
-import { getProductById, getSimilarProducts, getProductReviews, addProductReview } from '@/lib/supabase-marketplace';
+import { getProductById, getSimilarProducts, getProductReviews, addProductReview, addToCart } from '@/lib/supabase-marketplace';
+import { LocalNotifications } from '@capacitor/local-notifications';
 import type { FeaturedProduct } from '@/types';
 import type { ProductReview } from '@/lib/supabase-marketplace';
 import { getShopById } from '@/lib/shops-storage';
@@ -12,6 +13,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useUserProfile } from '@/contexts/UserProfileContext';
 import { OrderAmountModal } from '@/components/OrderAmountModal';
 import { StarRating } from '@/components/StarRating';
+import { formatIST } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
 
 export function ProductDetailsPage() {
@@ -102,6 +104,36 @@ export function ProductDetailsPage() {
       toast.error('Error adding review.');
     } finally {
       setIsSubmittingReview(false);
+    }
+  };
+
+  const handleAddToCart = async () => {
+    if (!user) {
+      toast.error('Please sign in to add items to cart.');
+      return;
+    }
+    
+    const success = await addToCart(user.uid, productId!, 1);
+    if (success) {
+      toast.success('Added to Cart!');
+      try {
+        await LocalNotifications.schedule({
+          notifications: [
+            {
+              title: "Added to Cart 🛒",
+              body: `${product?.title} has been added to your cart!`,
+              id: new Date().getTime(),
+              schedule: { at: new Date(Date.now() + 500) },
+              smallIcon: "ic_stat_name",
+              largeIcon: "res://drawable/notification_large_icon"
+            }
+          ]
+        });
+      } catch (err) {
+        console.error('Local notification error:', err);
+      }
+    } else {
+      toast.error('Failed to add to cart');
     }
   };
 
@@ -240,7 +272,7 @@ export function ProductDetailsPage() {
                 <div key={review.id} className="border-b border-slate-100 dark:border-slate-800 pb-4 last:border-0">
                   <div className="flex items-center justify-between mb-2">
                     <span className="font-bold text-sm text-slate-900 dark:text-white">{review.userName}</span>
-                    <span className="text-xs text-slate-400">{review.createdAt.toLocaleDateString()}</span>
+                    <span className="text-xs text-slate-400">{formatIST(review.createdAt, false)}</span>
                   </div>
                   <div className="flex items-center mb-2">
                     {[...Array(5)].map((_, i) => (
@@ -289,6 +321,7 @@ export function ProductDetailsPage() {
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-slate-900 border-t border-border/50 shadow-[0_-10px_20px_rgba(0,0,0,0.05)] z-40 flex gap-3">
         <Button 
           variant="outline" 
+          onClick={handleAddToCart}
           className="flex-1 h-14 rounded-2xl border-2 border-slate-200 text-slate-700 font-black text-sm uppercase tracking-wide"
         >
           <ShoppingBag className="h-5 w-5 mr-2" />

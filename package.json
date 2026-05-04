@@ -1,11 +1,11 @@
 {
-  "name": "user",
+  "name": "book-it",
   "private": true,
-  "version": "0.0.80",
+  "version": "0.0.105",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/increment-version.js && node scripts/sync-version.js && vite build",
+    "build": "node scripts/increment-version.js && node scripts/sync-android-version.js && node scripts/sync-version.js && vite build",
     "lint": "npm run lint:types && npm run lint:js && npm run lint:css && npm run check:css-vars && npm run check:css-classes",
     "preview": "vite preview",
     "lint:css": "stylelint \"src/**/*.css\" --fix --quiet",

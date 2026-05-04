@@ -29,6 +29,7 @@ declare global {
       ): void;
       stopForegroundAlarmService(): void;
       downloadAndInstallApk(url: string): void;
+      downloadImagesToGallery(urlsJson: string): void;
     };
   }
 }

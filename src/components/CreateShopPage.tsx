@@ -206,7 +206,7 @@ export const CreateShopPage = () => {
               <div className="space-y-2">
                 <Label className="text-slate-700 font-bold">Shop Name</Label>
                 <Input 
-                  placeholder="e.g. Classic Barber" 
+                  placeholder="e.g. Classic Shop" 
                   className="h-12 rounded-xl"
                   value={shopName}
                   onChange={(e) => setShopName(e.target.value)}

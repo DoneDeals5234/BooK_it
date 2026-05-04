@@ -63,6 +63,8 @@ export interface Shop {
   pinOrder?: number;
   isWebsiteBuilderEnabled?: boolean;
   isTokenBookingEnabled?: boolean;
+  upiId?: string;
+  advancePaymentMode?: 'none' | 'optional' | 'compulsory';
 }
 
 // Get all shops from Supabase

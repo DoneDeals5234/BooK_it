@@ -511,49 +511,51 @@ export default function ShortVideosPage({ onClose }: ShortVideosPageProps) {
 
       {/* Vertical Video Container - Smooth Snap Scrolling Up/Down */}
       <div className="relative w-full h-screen bg-black flex items-center justify-center overflow-hidden">
-        {/* Current Video - Full Screen */}
-        <div className="relative w-full h-full transition-opacity duration-300">
-          <video
-            ref={videoElementRef}
-            key={currentVideo.id}
-            src={currentVideo.videoUrl}
-            className="w-full h-full object-cover cursor-pointer"
-            style={{ willChange: 'transform' }}
-            autoPlay={isVideoPlaying}
-            loop
-            muted={false}
-            controls={false}
-            crossOrigin="anonymous"
-            preload="auto"
-            onClick={() => {
-              // Single tap to toggle play/pause
-              if (videoElementRef.current) {
-                if (videoElementRef.current.paused) {
-                  videoElementRef.current.play();
-                  setIsVideoPlaying(true);
-                } else {
-                  videoElementRef.current.pause();
-                  setIsVideoPlaying(false);
+        {/* PC Aspect Ratio Lock Wrapper */}
+        <div className="video-player-wrapper relative w-full h-full flex flex-col items-center justify-center">
+          {/* Current Video - Full Screen */}
+          <div className="relative w-full h-full transition-opacity duration-300">
+            <video
+              ref={videoElementRef}
+              key={currentVideo.id}
+              src={currentVideo.videoUrl}
+              className="w-full h-full object-cover cursor-pointer"
+              style={{ willChange: 'transform' }}
+              autoPlay={isVideoPlaying}
+              loop
+              muted={false}
+              controls={false}
+              crossOrigin="anonymous"
+              preload="auto"
+              onClick={() => {
+                // Single tap to toggle play/pause
+                if (videoElementRef.current) {
+                  if (videoElementRef.current.paused) {
+                    videoElementRef.current.play();
+                    setIsVideoPlaying(true);
+                  } else {
+                    videoElementRef.current.pause();
+                    setIsVideoPlaying(false);
+                  }
                 }
-              }
-            }}
-            onError={(e) => {
-              console.error('❌ Video playback error:', {
-                src: currentVideo.videoUrl,
-                error: e.currentTarget.error?.message,
-                code: e.currentTarget.error?.code,
-              });
-              setIsVideoLoading(false);
-            }}
-            onLoadStart={() => {
-              console.log('📹 Video loading started:', currentVideo.videoUrl);
-              setIsVideoLoading(true);
-            }}
-            onCanPlay={() => {
-              console.log('✅ Video can play');
-              setIsVideoLoading(false);
-            }}
-          />
+              }}
+              onError={(e) => {
+                console.error('❌ Video playback error:', {
+                  src: currentVideo.videoUrl,
+                  error: e.currentTarget.error?.message,
+                  code: e.currentTarget.error?.code,
+                });
+                setIsVideoLoading(false);
+              }}
+              onLoadStart={() => {
+                console.log('📹 Video loading started:', currentVideo.videoUrl);
+                setIsVideoLoading(true);
+              }}
+              onCanPlay={() => {
+                console.log('✅ Video can play');
+                setIsVideoLoading(false);
+              }}
+            />
 
           {/* Loading Spinner */}
           {isVideoLoading && (
@@ -641,6 +643,7 @@ export default function ShortVideosPage({ onClose }: ShortVideosPageProps) {
               </div>
             </div>
           </div>
+          </div>
         </div>
       </div>
 
@@ -661,4 +664,4 @@ export default function ShortVideosPage({ onClose }: ShortVideosPageProps) {
       )}
     </div>
   );
-};
+}

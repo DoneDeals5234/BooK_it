@@ -51,22 +51,23 @@ export const addWorldChatMessage = async (
 
 // Get all non-expired world chat messages
 export const getWorldChatMessages = async (
-  limit = 100
+  limit = 20
 ): Promise<WorldChatMessage[]> => {
   try {
-    const { data, error } = await supabase
+    // Fetch messages without any joins to ensure maximum stability
+    const { data: messages, error: msgError } = await supabase
       .from('world_chat_messages')
-      .select('*, profiles(image_url)')
+      .select('*')
       .gt('expires_at', new Date().toISOString())
       .order('created_at', { ascending: false })
       .limit(limit);
 
-    if (error) {
-      console.error('❌ Error fetching world chat messages:', error);
+    if (msgError) {
+      console.error('❌ Error fetching world chat messages:', msgError);
       return [];
     }
 
-    return (data || []) as WorldChatMessage[];
+    return (messages || []) as WorldChatMessage[];
   } catch (error) {
     console.error('❌ Error in getWorldChatMessages:', error);
     return [];
@@ -160,38 +161,48 @@ export const formatWorldChatTime = (dateString: string): string => {
   });
 };
 
-// Upload chat image to Supabase storage
+// Convert and Compress chat image to Base64 (Bypassing Storage Bucket)
 export const uploadWorldChatImage = async (
   file: File,
   userId: string
 ): Promise<string | null> => {
-  try {
-    const timestamp = Date.now();
-    const filename = `${userId}-${timestamp}-${file.name}`;
-    const filepath = `world-chat/${filename}`;
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        // Create canvas for compression
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
 
-    const { data, error } = await supabase.storage
-      .from('chat-images')
-      .upload(filepath, file, {
-        cacheControl: '3600',
-        upsert: false,
-      });
+        // Max dimensions (e.g., 1200px)
+        const MAX_SIZE = 1200;
+        if (width > height) {
+          if (width > MAX_SIZE) {
+            height *= MAX_SIZE / width;
+            width = MAX_SIZE;
+          }
+        } else {
+          if (height > MAX_SIZE) {
+            width *= MAX_SIZE / height;
+            height = MAX_SIZE;
+          }
+        }
 
-    if (error) {
-      console.error('❌ Error uploading image:', error);
-      return null;
-    }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
 
-    // Get public URL
-    const {
-      data: { publicUrl },
-    } = supabase.storage
-      .from('chat-images')
-      .getPublicUrl(filepath);
-
-    return publicUrl;
-  } catch (error) {
-    console.error('❌ Error in uploadWorldChatImage:', error);
-    return null;
-  }
+        // Convert to Base64 with quality reduction (0.6 = 60% quality)
+        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6);
+        resolve(compressedBase64);
+      };
+      img.onerror = () => resolve(null);
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(file);
+  });
 };

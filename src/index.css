@@ -132,3 +132,32 @@
     transform: translateY(0);
   }
 }
+
+@keyframes slide-treadmill {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+@keyframes run-squash {
+  0% { transform: translateY(0) scaleY(1) scaleX(1) rotate(0deg); }
+  50% { transform: translateY(-10px) scaleY(1.05) scaleX(0.95) rotate(2deg); }
+  100% { transform: translateY(0) scaleY(0.95) scaleX(1.05) rotate(-2deg); }
+}
+
+@keyframes slide-dots {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-24px); }
+}
+
+.loading-dots-text::after {
+  content: '';
+  animation: loading-dots 1.5s infinite;
+}
+
+@keyframes loading-dots {
+  0% { content: ''; }
+  25% { content: '.'; }
+  50% { content: '..'; }
+  75% { content: '...'; }
+  100% { content: ''; }
+}

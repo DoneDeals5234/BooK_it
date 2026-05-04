@@ -42,3 +42,24 @@ export const uploadWebsiteImage = async (shopId: string, file: File) => {
     throw error;
   }
 };
+export const uploadFile = async (bucket: string, path: string, file: File) => {
+  try {
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .upload(path, file, {
+        cacheControl: '3600',
+        upsert: true
+      });
+
+    if (error) throw error;
+
+    const { data: urlData } = supabase.storage
+      .from(bucket)
+      .getPublicUrl(path);
+
+    return urlData.publicUrl;
+  } catch (error) {
+    console.error('Error uploading file:', error);
+    return null;
+  }
+};

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { MapPin, Eye, Calendar, Search, Scissors, WifiOff, RefreshCw, Compass, Heart, User, Film, ChevronDown, MessageCircle, Store, ShoppingBag, Sparkles, Star as StarIcon, Heart as HeartIcon, Utensils, Zap, Shirt, Home as HomeIcon, Star, Footprints, ArrowRight, ShoppingBasket, Palette } from 'lucide-react';
+import { MapPin, Eye, Calendar, Search, Scissors, WifiOff, RefreshCw, Compass, Heart, User, Film, ChevronDown, MessageCircle, Store, ShoppingBag, Sparkles, Star as StarIcon, Heart as HeartIcon, Utensils, Zap, Shirt, Home as HomeIcon, Star, Footprints, ArrowRight, ShoppingBasket, Palette, ShoppingCart } from 'lucide-react';
 import { WorldChatModal } from '@/components/WorldChatModal';
 import { getShops, isShopCurrentlyOpen } from '@/lib/shops-storage';
 import { isTimeSlotRunningNow } from '@/lib/bookings-storage';
@@ -27,6 +27,7 @@ import { getPlayerIdFromNativeDevices } from '@/lib/supabase-native-devices';
 import { getAllCategories } from '@/lib/supabase-categories';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
+import { cacheShops, cacheCategories, getCachedShops, getCachedCategories, invalidateAllCaches } from '@/lib/shops-cache';
 
 // Alias for consistency
 const getCategories = getAllCategories;
@@ -64,6 +65,16 @@ export default function HomePage({ onShowLogin }: HomePageProps) {
   const contentRef = useRef<HTMLDivElement>(null);
   const { user: currentUser, userRole } = useAuth();
   const { profile } = useUserProfile();
+  const [cartCount, setCartCount] = useState(0);
+
+  useEffect(() => {
+    if (currentUser) {
+      supabase.from('cart_items').select('id', { count: 'exact' }).eq('user_id', currentUser.uid)
+        .then(({ count }) => {
+          if (count !== null) setCartCount(count);
+        });
+    }
+  }, [currentUser]);
 
   // Tab navigation order for swipe
   const tabOrder: TabType[] = ['explore', 'find', 'bazar', 'videos', 'offers'];
@@ -87,37 +98,41 @@ export default function HomePage({ onShowLogin }: HomePageProps) {
   // Load initial data and set up subscriptions
   useEffect(() => {
     const loadInitialData = async () => {
+      // --- STEP 1: Show cached data INSTANTLY (0ms) ---
+      const cachedShops = getCachedShops();
+      const cachedCategories = getCachedCategories();
+      if (cachedShops && cachedShops.length > 0) {
+        setShops(getOrderedShops(cachedShops));
+        setCategories(cachedCategories || []);
+        setLoading(false); // Hide spinner immediately
+      }
+
+      // --- STEP 2: Fetch shops + categories from Supabase (fast, only 2 queries) ---
       try {
-        const [supabaseBookings, shopsData, categoriesData] = await Promise.all([
-          getAllBookingsFromSupabase(),
+        const [shopsData, categoriesData] = await Promise.all([
           getShops(),
           getCategories(),
         ]);
-        setBookings(supabaseBookings);
         const orderedShops = getOrderedShops(shopsData);
         setShops(orderedShops);
         setCategories(categoriesData);
-        if (categoriesData.length > 0) {
-          setSelectedCategoryId(categoriesData[0].id);
-        }
-
-        // Load reviews for each shop
-        const reviewsMap: { [shopId: string]: any[] } = {};
-        for (const shop of orderedShops) {
-          try {
-            const reviews = await getReviewsForShop(shop.id);
-            reviewsMap[shop.id] = reviews;
-          } catch (error) {
-            console.error(`Error loading reviews for shop ${shop.id}:`, error);
-            reviewsMap[shop.id] = [];
-          }
-        }
-        setShopReviews(reviewsMap);
+        setSelectedCategoryId(null);
+        setLoading(false);
+        // Save fresh data to cache for next visit
+        cacheShops(shopsData);
+        cacheCategories(categoriesData);
       } catch (error) {
-        console.error('Error loading data:', error);
+        console.error('Error loading shops/categories:', error);
+        setLoading(false);
       }
 
-      setLoading(false);
+      // --- STEP 3: Fetch bookings in BACKGROUND (doesn't block UI) ---
+      getAllBookingsFromSupabase().then(supabaseBookings => {
+        setBookings(supabaseBookings);
+      }).catch(err => console.warn('Error loading bookings:', err));
+
+      // Reviews will be fetched on-demand in the shop details page
+      setShopReviews({});
     };
 
     loadInitialData();
@@ -159,17 +174,15 @@ export default function HomePage({ onShowLogin }: HomePageProps) {
       .subscribe();
 
     const refreshInterval = setInterval(async () => {
-      const [updated, shopsData, categoriesData] = await Promise.all([
-        getAllBookingsFromSupabase(),
+      const [shopsData, categoriesData] = await Promise.all([
         getShops(),
         getCategories(),
       ]);
-      setBookings(updated);
       // Clear cache to recalculate ordering based on current pin status
       clearShopOrderingCache();
       setShops(getOrderedShops(shopsData));
       setCategories(categoriesData);
-    }, 30000);
+    }, 60000);
 
     return () => {
       supabase.removeChannel(subscription);
@@ -208,6 +221,8 @@ export default function HomePage({ onShowLogin }: HomePageProps) {
     if (pullDistance > 60 && !isRefreshing && isOnline) {
       setIsRefreshing(true);
       try {
+        // Invalidate cache so we always get fresh data on manual refresh
+        invalidateAllCaches();
         clearShopOrderingCache();
         const [updated, shopsData, categoriesData] = await Promise.all([
           getAllBookingsFromSupabase(),
@@ -215,8 +230,12 @@ export default function HomePage({ onShowLogin }: HomePageProps) {
           getCategories(),
         ]);
         setBookings(updated);
-        setShops(getOrderedShops(shopsData));
+        const orderedShops = getOrderedShops(shopsData);
+        setShops(orderedShops);
         setCategories(categoriesData);
+        // Save fresh data to cache
+        cacheShops(shopsData);
+        cacheCategories(categoriesData);
       } catch (error) {
         console.error('Error refreshing data:', error);
       } finally {
@@ -283,8 +302,33 @@ export default function HomePage({ onShowLogin }: HomePageProps) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 flex items-center justify-center">
-        <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary/30 border-t-primary" />
+      <div className="min-h-screen bg-white dark:bg-slate-950 flex flex-col items-center justify-center relative overflow-hidden">
+        {/* Custom Boy Running Animation Container */}
+        <div className="relative flex flex-col items-center justify-center w-64 h-64">
+          
+          {/* Animated Boy Image with Squash & Stretch to simulate running */}
+          <div className="relative z-10 w-48 h-48 drop-shadow-2xl" style={{ animation: 'run-squash 0.35s ease-in-out infinite alternate' }}>
+            <img 
+              src="/running-boy.png" 
+              alt="Loading..." 
+              className="w-full h-full object-contain dark:mix-blend-normal origin-bottom"
+            />
+          </div>
+
+          {/* Treadmill Track / Motion Trails */}
+          <div className="absolute bottom-8 w-40 h-2 overflow-hidden flex items-center justify-center opacity-40">
+             <div className="flex gap-2 w-[200%] h-1" style={{ animation: 'slide-dots 0.4s linear infinite' }}>
+                {Array.from({ length: 15 }).map((_, i) => (
+                  <div key={i} className="h-1 w-3 bg-slate-300 dark:bg-slate-700 rounded-full flex-shrink-0"></div>
+                ))}
+             </div>
+          </div>
+        </div>
+
+        {/* Loading Text */}
+        <h2 className="mt-4 text-xl font-bold text-slate-800 dark:text-slate-200 tracking-wide">
+          Loading<span className="loading-dots-text"></span>
+        </h2>
       </div>
     );
   }
@@ -315,7 +359,19 @@ export default function HomePage({ onShowLogin }: HomePageProps) {
 
     // Apply category filter if not searching and not on bazar/offers
     if (selectedCategoryId && !searchQuery && currentTab === 'explore') {
-      filtered = filtered.filter(shop => shop.categoryId === selectedCategoryId);
+      const selectedCategory = categories.find(c => c.id === selectedCategoryId);
+      if (selectedCategory) {
+        const categoryName = selectedCategory.name.toLowerCase();
+        const categorySlug = (selectedCategory.slug || '').toLowerCase();
+
+        filtered = filtered.filter(shop => {
+          const shopCat = (shop.category || '').toLowerCase();
+          return shopCat === categoryName ||
+            shopCat === categorySlug ||
+            shopCat.includes(categoryName) ||
+            shopCat.includes(categorySlug);
+        });
+      }
     }
 
     // Location-based sorting for explore tab
@@ -414,7 +470,7 @@ export default function HomePage({ onShowLogin }: HomePageProps) {
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
-          className="relative z-10 container mx-auto px-3 sm:px-4 py-4 sm:py-8 pt-6 sm:pt-10 max-w-2xl flex-1 overflow-y-auto overflow-x-hidden pb-32 no-scrollbar"
+          className="relative z-10 container mx-auto px-3 sm:px-4 py-4 sm:py-8 pt-16 sm:pt-20 max-w-2xl flex-1 overflow-y-auto overflow-x-hidden pb-32 no-scrollbar"
           style={{ marginTop: isOnline ? 0 : 40 }}
         >
           {/* New Premium Banner Section */}
@@ -423,6 +479,8 @@ export default function HomePage({ onShowLogin }: HomePageProps) {
               src="/banner-bg.png"
               className="absolute inset-0 w-full h-full object-cover"
               alt="Banner Background"
+              loading="lazy"
+              decoding="async"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
 
@@ -459,8 +517,8 @@ export default function HomePage({ onShowLogin }: HomePageProps) {
                 className="flex flex-col items-center gap-2 group snap-start shrink-0"
               >
                 <div className={`h-10 w-10 sm:h-12 sm:w-12 rounded-full flex items-center justify-center transition-all duration-300 relative ${!selectedCategoryId
-                    ? 'bg-red-500 text-white shadow-lg shadow-red-500/20 scale-105'
-                    : 'bg-white dark:bg-slate-800 text-red-500 border border-slate-100 dark:border-slate-700 shadow-md shadow-black/5 hover:shadow-lg hover:-translate-y-0.5'
+                  ? 'bg-red-500 text-white shadow-lg shadow-red-500/20 scale-105'
+                  : 'bg-white dark:bg-slate-800 text-red-500 border border-slate-100 dark:border-slate-700 shadow-md shadow-black/5 hover:shadow-lg hover:-translate-y-0.5'
                   }`}>
                   {!selectedCategoryId && (
                     <div className="absolute inset-[-2px] rounded-full border border-red-500/30 scale-110"></div>
@@ -499,8 +557,8 @@ export default function HomePage({ onShowLogin }: HomePageProps) {
                     className="flex flex-col items-center gap-2 group snap-start shrink-0"
                   >
                     <div className={`h-10 w-10 sm:h-12 sm:w-12 rounded-full flex items-center justify-center transition-all duration-300 relative ${isActive
-                        ? 'bg-red-500 text-white shadow-lg shadow-red-500/20 scale-105'
-                        : 'bg-white dark:bg-slate-800 text-red-500 border border-slate-100 dark:border-slate-700 shadow-md shadow-black/5 hover:shadow-lg hover:-translate-y-0.5'
+                      ? 'bg-red-500 text-white shadow-lg shadow-red-500/20 scale-105'
+                      : 'bg-white dark:bg-slate-800 text-red-500 border border-slate-100 dark:border-slate-700 shadow-md shadow-black/5 hover:shadow-lg hover:-translate-y-0.5'
                       }`}>
                       {isActive && (
                         <div className="absolute inset-[-2px] rounded-full border border-red-500/30 scale-110"></div>
@@ -603,6 +661,8 @@ export default function HomePage({ onShowLogin }: HomePageProps) {
                                 src={shop.shopImageUrl}
                                 alt={shop.name}
                                 className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                loading="lazy"
+                                decoding="async"
                               />
                             ) : (
                               <Scissors className="h-12 sm:h-16 w-12 sm:w-16 text-red-300 group-hover:scale-110 transition-transform duration-300" />
@@ -788,7 +848,7 @@ export default function HomePage({ onShowLogin }: HomePageProps) {
               </div>
               <h2 className="text-lg sm:text-2xl font-semibold mb-2">No Shops Available</h2>
               <p className="text-sm sm:text-base text-muted-foreground">
-                Check back soon! Barbershops will be added soon.
+                Check back soon! Shops will be added soon.
               </p>
             </div>
           ) : isCatSearching ? (

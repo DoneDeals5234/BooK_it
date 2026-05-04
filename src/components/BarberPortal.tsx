@@ -6,10 +6,47 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Globe as GlobeIcon, ArrowLeft, Lock, Phone, CheckCircle, Pause, Play, LogOut, Settings, Trash2, Plus, Edit, X, Upload, Camera, MapPin, Loader2, Megaphone, Bell, Package, Palette, Eye, Video, Store, HelpCircle, Send, Mail, Zap, Book, ShoppingCart } from 'lucide-react';
+import { 
+  Eye, 
+  Settings, 
+  EyeOff, 
+  Bell, 
+  CheckCircle, 
+  XCircle, 
+  Pause, 
+  Play, 
+  Phone, 
+  MessageSquare, 
+  MapPin, 
+  Loader2, 
+  LogOut, 
+  Globe, 
+  HelpCircle, 
+  Upload, 
+  Camera, 
+  Trash2, 
+  Plus, 
+  Palette, 
+  Megaphone, 
+  Lock, 
+  Zap, 
+  ShoppingCart, 
+  Video, 
+  GlobeIcon, 
+  Book, 
+  User,
+  CreditCard,
+  ArrowLeft,
+  Edit,
+  X,
+  Mail,
+  Store
+} from 'lucide-react';
 import { getShops, updateShop, getShopById } from '@/lib/shops-storage';
+import { formatIST } from '@/lib/utils';
 import { SendThoughtModal } from './SendThoughtModal';
 import { getLatestPlanForEmail, type ShopOwnerPlan } from '@/lib/supabase-shop-owner-plans';
+import { PrintingSettingsPanel } from './PrintingSettingsPanel';
 import { fetchUserLocation } from '@/lib/geolocation';
 import { shouldShopBeOpen } from '@/lib/shop-hours-helper';
 import { getShopBookingsFromSupabase } from '@/lib/supabase-bookings';
@@ -27,12 +64,13 @@ import { VideoRecorder } from './VideoRecorder';
 import { WebsiteBuilder } from './WebsiteBuilder';
 import { KhataBook } from './KhataBook';
 import { OrderRequestsPanel } from './OrderRequestsPanel';
+import toast from 'react-hot-toast';
+import { notifySuccess } from '@/lib/notification-helper';
 import { getFeaturedProductsByShopId, addFeaturedProduct, updateFeaturedProduct, deleteFeaturedProduct } from '@/lib/supabase-featured-products';
 import { getAllOffersByShopId, addOffer, updateOffer, deleteOffer } from '@/lib/supabase-offers';
 import type { Shop } from '@/lib/shops-storage';
 import type { Booking } from '@/lib/bookings-storage';
 import type { FeaturedProduct, ShopOffer } from '@/types';
-import toast from 'react-hot-toast';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 interface BarberPortalProps {
@@ -243,10 +281,15 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
       console.log('🎯 Starting layered heartbeat for shop:', selectedShop.id);
       startShopHeartbeat(selectedShop.id);
 
-      // Start Native Foreground Service for Shop Owners (Always On Orders)
+      // Start/stop Native Foreground Service for Shop Owners based on status
       if (typeof window !== 'undefined' && (window as any).AlarmBridge) {
-        console.log('🟢 Triggering Native ShopOnlineService');
-        (window as any).AlarmBridge.startShopOnlineService();
+        if (selectedShop.isOpen) {
+          console.log('🟢 Triggering Native ShopOnlineService (Shop is OPEN)');
+          (window as any).AlarmBridge.startShopOnlineService();
+        } else {
+          console.log('🔴 Stopping Native ShopOnlineService (Shop is CLOSED)');
+          (window as any).AlarmBridge.stopShopOnlineService();
+        }
       }
 
       // Layer 3: Listen to app lifecycle changes for immediate status updates
@@ -520,7 +563,7 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
         .getPublicUrl(filePath);
 
       setFormData({ ...formData, shopInteriorVideoUrl: publicUrl });
-      toast.success('Video uploaded successfully!', { id: toastId });
+      notifySuccess('Video uploaded successfully!', 'Shop Gallery');
     } catch (error) {
       console.error('Error uploading video:', error);
       toast.error('Failed to upload video', { id: toastId });
@@ -545,13 +588,19 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
 
         // Show detailed feedback to owner
         if (updated.isOpen) {
-          toast.success('✅ Shop is now OPEN', {
-            duration: 2000,
-          });
+          notifySuccess('Shop is now OPEN', 'Shop Status');
+          
+          // Start native service if shop is now open
+          if ((window as any).AlarmBridge) {
+            (window as any).AlarmBridge.startShopOnlineService();
+          }
         } else {
-          toast.success('🔴 Shop is now CLOSED', {
-            duration: 2000,
-          });
+          notifySuccess('Shop is now CLOSED', 'Shop Status');
+          
+          // Stop native service if shop is now closed
+          if ((window as any).AlarmBridge) {
+            (window as any).AlarmBridge.stopShopOnlineService();
+          }
         }
       }
     } catch (error) {
@@ -566,7 +615,7 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
     const updated = await updateShop(selectedShop.id, { tokenBookingPaused: !selectedShop.tokenBookingPaused });
     if (updated) {
       setSelectedShop(updated);
-      toast.success(updated.tokenBookingPaused ? 'Token booking paused' : 'Token booking resumed');
+      notifySuccess(updated.tokenBookingPaused ? 'Token booking paused' : 'Token booking resumed', 'Booking Status');
     }
   };
 
@@ -576,7 +625,7 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
     const updated = await updateShop(selectedShop.id, { isTokenBookingEnabled: !selectedShop.isTokenBookingEnabled });
     if (updated) {
       setSelectedShop(updated);
-      toast.success(updated.isTokenBookingEnabled ? 'Booking token facility enabled' : 'Booking token facility disabled');
+      notifySuccess(updated.isTokenBookingEnabled ? 'Booking token facility enabled' : 'Booking token facility disabled', 'Facility Update');
     }
   };
 
@@ -648,6 +697,51 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
     }
   };
 
+  const fetchProfileLocationToShop = async () => {
+    if (!user?.uid) return;
+    setGettingLocation(true);
+    try {
+      const { supabase } = await import('@/lib/supabase');
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('user_id', user.uid)
+        .single();
+
+      if (profile) {
+        let found = false;
+        const updates: any = {};
+        
+        if (profile.address) {
+          updates.address = profile.address;
+          updates.location = profile.address;
+          found = true;
+        }
+        if (profile.latitude && profile.longitude) {
+          updates.latitude = profile.latitude;
+          updates.longitude = profile.longitude;
+          updates.locationMapLink = `https://www.google.com/maps?q=${profile.latitude},${profile.longitude}`;
+          found = true;
+        } else if (profile.google_map_link) {
+           updates.locationMapLink = profile.google_map_link;
+           found = true;
+        }
+
+        if (found) {
+          setFormData({ ...formData, ...updates });
+          toast.success('Location fetched from your profile! 👤');
+        } else {
+          toast.error('No address or coordinates found in your profile.');
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching profile location:', err);
+      toast.error('Failed to fetch profile location');
+    } finally {
+      setGettingLocation(false);
+    }
+  };
+
   const handleLogout = () => {
     setStep('select-shop');
     setSelectedShop(null);
@@ -663,11 +757,11 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
           <Card className="border-destructive">
             <CardHeader>
               <CardTitle className="text-destructive">Access Denied</CardTitle>
-              <CardDescription>You don't have access to the Barber Portal</CardDescription>
+              <CardDescription>You don't have access to the Owner Portal</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                The Barber Portal is only available for shop owners. If you are a shop owner, please log in with your shop owner account.
+                The Owner Portal is only available for shop owners. If you are a shop owner, please log in with your shop owner account.
               </p>
               <Button variant="outline" onClick={onClose} className="w-full">
                 <ArrowLeft className="mr-2 h-4 w-4" />
@@ -758,7 +852,7 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
           <Card>
             <CardHeader>
               <CardTitle>Portal Access</CardTitle>
-              <CardDescription>Enter your barber portal password to access</CardDescription>
+              <CardDescription>Enter your owner portal password to access</CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handlePasswordSubmit} className="space-y-4">
@@ -1110,7 +1204,7 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
                                   </div>
                                   <div>
                                     <p className="font-medium text-foreground">Date</p>
-                                    <p>{new Date(booking.bookingDate).toLocaleDateString()}</p>
+                                    <p>{formatIST(booking.bookingDate, false)}</p>
                                   </div>
                                   <div>
                                     <p className="font-medium text-foreground">Phone</p>
@@ -1218,6 +1312,9 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
                   </CardContent>
                 </Card>
 
+                {/* Printing Service Settings */}
+                <PrintingSettingsPanel shopId={selectedShop.id} />
+
                 {/* Basic Information */}
                 <Card>
                   <CardHeader>
@@ -1310,6 +1407,41 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
                           className="text-sm"
                         />
                       </div>
+                    </div>
+
+                    <div className="pt-4 border-t space-y-4">
+                      <h4 className="font-bold text-slate-800 flex items-center gap-2">
+                        <CreditCard className="h-4 w-4" />
+                        Advance Payment Settings
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="upi-id" className="text-xs sm:text-sm">UPI ID (for receiving payments)</Label>
+                          <Input
+                            id="upi-id"
+                            value={formData.upiId || ''}
+                            onChange={(e) => setFormData({ ...formData, upiId: e.target.value })}
+                            placeholder="e.g. shopname@okicici"
+                            className="text-sm"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="advance-payment-mode" className="text-xs sm:text-sm">Advance Payment Mode</Label>
+                          <select
+                            id="advance-payment-mode"
+                            value={formData.advancePaymentMode || 'none'}
+                            onChange={(e) => setFormData({ ...formData, advancePaymentMode: e.target.value as any })}
+                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <option value="none">No Advance Payment (OFF)</option>
+                            <option value="optional">Optional Advance Payment</option>
+                            <option value="compulsory">Compulsory Advance Payment</option>
+                          </select>
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground italic">
+                        If enabled, customers will be asked to pay advance via UPI for Shop Pickup orders.
+                      </p>
                     </div>
                   </CardContent>
                 </Card>
@@ -1467,7 +1599,7 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
                             const link = generateGoogleMapsLink(formData.latitude, formData.longitude);
                             if (link) {
                               setFormData({ ...formData, locationMapLink: link });
-                              toast.success('Google Maps link generated!');
+                              notifySuccess('Google Maps link generated!', 'Location');
                             }
                           }}
                           className="w-full"
@@ -1484,24 +1616,32 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
                     {/* Auto-detect Location */}
                     <div className="border-t pt-3 sm:pt-4">
                       <Label className="mb-2 block text-xs sm:text-sm">Auto-detect Location</Label>
-                      <Button
-                        onClick={handleGetLocation}
-                        disabled={gettingLocation}
-                        className="w-full"
-                        variant="outline"
-                      >
-                        {gettingLocation ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Getting your location...
-                          </>
-                        ) : (
-                          <>
-                            <MapPin className="mr-2 h-4 w-4" />
-                            Get My Location
-                          </>
-                        )}
-                      </Button>
+                        <div className="grid grid-cols-2 gap-2">
+                          <Button
+                            onClick={handleGetLocation}
+                            disabled={gettingLocation}
+                            className="flex-1"
+                            variant="outline"
+                          >
+                            {gettingLocation ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <>
+                                <MapPin className="mr-2 h-4 w-4" />
+                                Auto GPS
+                              </>
+                            )}
+                          </Button>
+                          <Button
+                            onClick={fetchProfileLocationToShop}
+                            disabled={gettingLocation}
+                            className="flex-1"
+                            variant="outline"
+                          >
+                            <User className="mr-2 h-4 w-4" />
+                            Use Profile
+                          </Button>
+                        </div>
 
                       {/* Manual Address Input */}
                       <div className="border-t pt-3 sm:pt-4 mt-3">
@@ -2035,7 +2175,7 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
                                         </button>
                                       </div>
                                       <p className="text-xs text-muted-foreground">
-                                        Expires: {new Date(offer.validUntil).toLocaleDateString()}
+                                        Expires: {formatIST(offer.validUntil, false)}
                                       </p>
                                     </CardContent>
                                   </Card>
@@ -2079,7 +2219,7 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
                                         </button>
                                       </div>
                                       <p className="text-xs text-muted-foreground">
-                                        Expired: {new Date(offer.validUntil).toLocaleDateString()}
+                                        Expired: {formatIST(offer.validUntil, false)}
                                       </p>
                                     </CardContent>
                                   </Card>

@@ -4,7 +4,7 @@
  */
 
 const ONESIGNAL_APP_ID = '1f14fad4-0d2f-465a-b3a8-e0e976b8729f';
-const ONESIGNAL_API_KEY = 'os_v2_app_d4kpvvanf5dfvm5i4duxnodst735kymt7txulwnftdubelcq2qw5yu7acbdtxn3ye7af2qsizzhz3jtptubvm4wi46xzpqeh2wn2vvq';
+const ONESIGNAL_API_KEY = 'os_v2_app_d4kpvvanf5dfvm5i4duxnodst76akwxbdjquqneohglqc6iifuuhdn4av55a3hnrju3zbhm52yuf7ga3gzuqhjggxzseurcjfrnmc5y';
 const ONESIGNAL_API_URL = 'https://onesignal.com/api/v1/notifications';
 
 export interface DirectNotificationPayload {

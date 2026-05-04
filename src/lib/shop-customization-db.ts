@@ -23,6 +23,7 @@ export interface ShopCustomization {
     showChats: boolean;
     showReviews: boolean;
     showFeaturedProducts: boolean;
+    showPrinting: boolean;
   };
   createdAt?: string;
   updatedAt?: string;
@@ -74,6 +75,7 @@ export const getShopCustomization = async (
         showChats: data.show_chats,
         showReviews: data.show_reviews,
         showFeaturedProducts: data.show_featured_products ?? true,
+        showPrinting: data.show_printing ?? false,
       },
       createdAt: data.created_at,
       updatedAt: data.updated_at,
@@ -108,6 +110,7 @@ export const saveShopCustomization = async (
       show_chats: customization.enabledFeatures.showChats,
       show_reviews: customization.enabledFeatures.showReviews,
       show_featured_products: customization.enabledFeatures.showFeaturedProducts,
+      show_printing: customization.enabledFeatures.showPrinting,
       last_updated: Date.now(),
     };
 
@@ -222,6 +225,7 @@ export const getAllCustomizations = async (): Promise<
         showChats: item.show_chats,
         showReviews: item.show_reviews,
         showFeaturedProducts: item.show_featured_products ?? true,
+        showPrinting: item.show_printing ?? false,
       },
       createdAt: item.created_at,
       updatedAt: item.updated_at,
@@ -293,6 +297,7 @@ export const getDefaultCustomization = (shopId: string): ShopCustomization => {
       showChats: true,
       showReviews: true,
       showFeaturedProducts: true,
+      showPrinting: false,
     },
     lastUpdated: Date.now(),
   };

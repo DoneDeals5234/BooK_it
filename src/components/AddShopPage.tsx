@@ -227,7 +227,7 @@ export const AddShopPage = ({ onClose }: AddShopPageProps) => {
                   id="shop-name"
                   value={shopName}
                   onChange={(e) => setShopName(e.target.value)}
-                  placeholder="e.g., Classic Cuts Barber Shop"
+                  placeholder="e.g., Classic Cuts Shop"
                   disabled={loading}
                 />
                 <p className="text-xs text-muted-foreground">

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Bell, Clock, DollarSign, User, Phone, Check, X } from 'lucide-react';
+import { Bell, Clock, IndianRupee, User, Phone, Check, X } from 'lucide-react';
 import type { BookingRequest } from '@/contexts/BookingNegotiationContext';
 
 interface OwnerBookingAlertProps {
@@ -114,7 +114,7 @@ export const OwnerBookingAlert = ({
               <div className="border-t" />
 
               <div className="flex items-start gap-3">
-                <DollarSign className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                <IndianRupee className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="text-xs font-semibold text-muted-foreground">SERVICE</p>
                   <p className="font-semibold">{request.serviceName}</p>

@@ -6,6 +6,7 @@ import { sendScheduledReminderNotification } from '@/lib/onesignal-messaging';
 import { useAuth } from '@/contexts/AuthContext';
 import { startForegroundAlarmService } from '@/lib/alarm-scheduler';
 import { supabase } from '@/lib/supabase';
+import { formatIST } from '@/lib/utils';
 
 interface ReminderSettingsProps {
   bookingId: string;
@@ -237,7 +238,7 @@ export const ReminderSettings: React.FC<ReminderSettingsProps> = ({
           <div className="flex items-center justify-between">
             <span className="text-gray-700">Date & Time:</span>
             <span className="font-semibold text-gray-900">
-              {formatDate(bookingDate)} at {bookingTime}
+              {formatIST(bookingDate, false)} at {bookingTime}
             </span>
           </div>
         </div>
@@ -386,8 +387,4 @@ function getTimezoneOffset(): number {
   return -new Date().getTimezoneOffset() / 60;
 }
 
-function formatDate(dateString: string): string {
-  const [year, month, day] = dateString.split('-').map(Number);
-  const date = new Date(year, month - 1, day);
-  return date.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
-}
+

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { MapPin, Phone, Loader2, AlertCircle, MapIcon } from 'lucide-react';
+import { MapPin, Phone, Loader2, AlertCircle, MapIcon, Package } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getShopById } from '@/lib/shops-storage';
 import { Order, markOrderDelivered } from '@/lib/supabase-orders';
@@ -165,6 +165,15 @@ export const OrderCollectionModal = ({
                 }
               </p>
             </div>
+
+            {/* OTP for Delivery Orders */}
+            {order.delivery_type === 'delivery' && order.otp_code && order.status !== 'delivered' && (
+              <div className="bg-indigo-600 p-4 rounded-2xl text-center shadow-xl shadow-indigo-100 dark:shadow-none">
+                <p className="text-[10px] font-black text-indigo-100 uppercase tracking-widest mb-1">Your Delivery OTP</p>
+                <p className="text-4xl font-black text-white tracking-[0.5em] ml-[0.5em]">{order.otp_code}</p>
+                <p className="text-[9px] font-bold text-indigo-200 mt-2">Only share this with the delivery person after you receive your items</p>
+              </div>
+            )}
 
             {/* Actions */}
             <div className="flex flex-col gap-3 pt-4 border-t border-gray-100 dark:border-gray-700">

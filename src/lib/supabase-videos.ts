@@ -5,8 +5,9 @@ import type { Video } from '@/lib/videos-storage';
 export const getAllVideosFromSupabase = async (): Promise<Video[]> => {
   const { data, error } = await supabase
     .from('videos')
-    .select('*')
-    .order('created_at', { ascending: false });
+    .select('id,uploader_name,uploader_type,uploader_id,video_url,duration,caption,likes,liked_by,created_at')
+    .order('created_at', { ascending: false })
+    .limit(50);
 
   if (error) {
     console.error('Error fetching videos:', error);
@@ -299,9 +300,10 @@ export const checkUniqueProfileNameFromSupabase = async (profileName: string): P
 export const getVideosByUploaderIdFromSupabase = async (uploaderId: string): Promise<Video[]> => {
   const { data, error } = await supabase
     .from('videos')
-    .select('*')
+    .select('id,uploader_name,uploader_type,uploader_id,video_url,duration,caption,likes,liked_by,created_at')
     .eq('uploader_id', uploaderId)
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .limit(30);
 
   if (error) {
     console.error('Error fetching videos by uploader ID:', error);

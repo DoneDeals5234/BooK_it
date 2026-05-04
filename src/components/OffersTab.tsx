@@ -5,6 +5,7 @@ import { Tag, Shop, ArrowRight, Gift, Clock, Star } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getActiveOffersByShopId } from '@/lib/supabase-offers';
 import { getShops } from '@/lib/shops-storage';
+import { formatIST } from '@/lib/utils';
 import type { ShopOffer } from '@/types';
 import type { Shop as ShopType } from '@/lib/shops-storage';
 
@@ -129,7 +130,7 @@ export const OffersTab = ({ onShopClick }: OffersTabProps) => {
                     <div className="flex items-center justify-between mt-2">
                       <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400">
                         <Clock className="h-3 w-3" />
-                        <span>Valid until {new Date(offer.end_date).toLocaleDateString()}</span>
+                        <span>Valid until {formatIST(offer.end_date, false)}</span>
                       </div>
                       <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white text-[10px] h-7 px-3 rounded-full font-black">
                         VIEW SHOP

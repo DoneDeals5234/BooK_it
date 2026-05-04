@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Bell, Clock, DollarSign, User, Phone, AlertCircle } from 'lucide-react';
+import { Bell, Clock, IndianRupee, User, Phone, AlertCircle } from 'lucide-react';
 import { subscribeToBookingRequests } from '@/lib/booking-negotiation';
 import { OwnerBookingAlert } from './OwnerBookingAlert';
 import { OwnerCounterOfferModal } from './OwnerCounterOfferModal';

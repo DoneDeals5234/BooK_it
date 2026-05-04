@@ -4,11 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, AlertCircle, MapPin, Plus, Minus, CheckCircle, Navigation, ShoppingBag } from 'lucide-react';
+import { Loader2, AlertCircle, MapPin, Plus, Minus, CheckCircle, Navigation, ShoppingBag, User } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { createOrder } from '@/lib/supabase-orders';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserProfile } from '@/contexts/UserProfileContext';
+import { fetchUserLocation } from '@/lib/geolocation';
 
 // Helper: extract lat/lng from a Google Maps URL
 const extractCoordsFromMapLink = (link: string): { lat: number; lng: number } | null => {
@@ -105,39 +106,7 @@ export const OrderAmountModal = ({
 
   const totalAmount = (productPrice * quantity) + (deliveryType === 'delivery' ? deliveryCost : 0);
 
-  // Listen for native location signals
-  useEffect(() => {
-    const handleLocationReceived = (event: any) => {
-      try {
-        const data = typeof event.detail === 'string' ? JSON.parse(event.detail) : event.detail;
-        const link = `https://www.google.com/maps?q=${data.lat},${data.lng}`;
-        setLocationLink(link);
-        setCustomerCoords({ lat: data.lat, lng: data.lng });
-        setIsFetchingLocation(false);
-        toast.success('Location attached to order! 📍');
-      } catch (err) {
-        console.error('Error parsing location data:', err);
-        setIsFetchingLocation(false);
-      }
-    };
 
-    const handleLocationError = (event: any) => {
-      const data = typeof event.detail === 'string' ? JSON.parse(event.detail) : event.detail;
-      console.warn('Location error:', data.message);
-      setIsFetchingLocation(false);
-      if (data.message !== 'Permission Required') {
-        toast.error('Could not get precise location. Using address only.');
-      }
-    };
-
-    document.addEventListener('locationReceived', handleLocationReceived);
-    document.addEventListener('locationError', handleLocationError);
-
-    return () => {
-      document.removeEventListener('locationReceived', handleLocationReceived);
-      document.removeEventListener('locationError', handleLocationError);
-    };
-  }, []);
 
   // Pre-fill address from profile when delivery is selected
   useEffect(() => {
@@ -166,14 +135,55 @@ export const OrderAmountModal = ({
     }
   }, [isOpen, deliveryType, profile]);
 
-  const fetchLocation = useCallback(() => {
-    if (window.AlarmBridge) {
-      setIsFetchingLocation(true);
-      window.AlarmBridge.getCurrentLocation();
-    } else {
-      toast.error('GPS only works on Android devices');
+  const fetchLocation = useCallback(async () => {
+    setIsFetchingLocation(true);
+    try {
+      const location = await fetchUserLocation();
+      const link = `https://www.google.com/maps?q=${location.latitude},${location.longitude}`;
+      setLocationLink(link);
+      setCustomerCoords({ lat: location.latitude, lng: location.longitude });
+      if (location.formattedAddress && !address) {
+        setAddress(location.formattedAddress);
+      }
+      toast.success('Location attached to order! 📍');
+    } catch (error: any) {
+      console.warn('Location error:', error);
+      toast.error(error.message || 'Could not get precise location. Please check your GPS.');
+    } finally {
+      setIsFetchingLocation(false);
     }
-  }, []);
+  }, [address]);
+
+  const fetchProfileLocation = useCallback(() => {
+    if (profile) {
+      let found = false;
+      if (profile.address) {
+        setAddress(profile.address);
+        found = true;
+      }
+      if (profile.google_map_link) {
+        setLocationLink(profile.google_map_link);
+        const parsed = extractCoordsFromMapLink(profile.google_map_link);
+        if (parsed) {
+          setCustomerCoords(parsed);
+        }
+        found = true;
+      } else if (profile.latitude && profile.longitude) {
+        const link = `https://www.google.com/maps?q=${profile.latitude},${profile.longitude}`;
+        setLocationLink(link);
+        setCustomerCoords({ lat: profile.latitude, lng: profile.longitude });
+        found = true;
+      }
+
+      if (found) {
+        toast.success('Location fetched from profile! 👤');
+      } else {
+        toast.error('No address or location found in your profile.');
+      }
+    } else {
+      toast.error('Profile details not loaded yet.');
+    }
+  }, [profile]);
 
   const handleClose = () => {
     setQuantity(1);
@@ -208,8 +218,8 @@ export const OrderAmountModal = ({
       await createOrder(
         shopId,
         user.uid,
-        user.displayName || 'Guest Customer',
-        user.email || 'unknown',
+        user.displayName || profile?.name || 'Guest Customer',
+        profile?.phone || 'Not provided',
         totalAmount,
         description || undefined,
         quantity,
@@ -338,22 +348,34 @@ export const OrderAmountModal = ({
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <Label htmlFor="address" className="text-xs font-bold text-slate-500 uppercase tracking-widest">Delivery Address</Label>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="text-blue-600 h-auto p-0 hover:bg-transparent text-[11px] font-bold"
-                onClick={fetchLocation}
-                disabled={isFetchingLocation || !!locationLink}
-              >
-                {isFetchingLocation ? (
-                  <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                ) : locationLink ? (
-                  <CheckCircle className="h-3 w-3 mr-1 text-green-500" />
-                ) : (
-                  <MapPin className="h-3 w-3 mr-1" />
-                )}
-                {locationLink ? 'GPS ATTACHED' : 'USE AUTO GPS'}
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="text-blue-600 h-auto p-0 hover:bg-transparent text-[11px] font-bold"
+                  onClick={fetchProfileLocation}
+                >
+                  <User className="h-3 w-3 mr-1" />
+                  USE PROFILE
+                </Button>
+                <div className="w-px h-3 bg-slate-200" />
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="text-blue-600 h-auto p-0 hover:bg-transparent text-[11px] font-bold"
+                  onClick={fetchLocation}
+                  disabled={isFetchingLocation || !!locationLink}
+                >
+                  {isFetchingLocation ? (
+                    <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                  ) : locationLink ? (
+                    <CheckCircle className="h-3 w-3 mr-1 text-green-500" />
+                  ) : (
+                    <MapPin className="h-3 w-3 mr-1" />
+                  )}
+                  {isFetchingLocation ? 'FETCHING...' : locationLink ? 'GPS ATTACHED' : 'USE AUTO GPS'}
+                </Button>
+              </div>
             </div>
             <Textarea
               id="address"

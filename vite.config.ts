@@ -14,5 +14,17 @@ export default defineConfig({
     strictPort: false,
     host: true,
     allowedHosts: true,
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-ui': ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu', '@radix-ui/react-select', '@radix-ui/react-tabs', 'lucide-react', 'framer-motion'],
+          'vendor-supabase': ['@supabase/supabase-js'],
+          'vendor-utils': ['date-fns', 'clsx', 'tailwind-merge', 'zod']
+        }
+      }
+    },
+    chunkSizeWarningLimit: 1000
   }
 });

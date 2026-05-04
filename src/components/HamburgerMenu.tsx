@@ -14,6 +14,7 @@ import { SendThoughtModal } from '@/components/SendThoughtModal';
 import { ThoughtInboxModal } from '@/components/ThoughtInboxModal';
 import { getLatestPlanForEmail } from '@/lib/supabase-shop-owner-plans';
 import toast from 'react-hot-toast';
+import { sanitizeSupabaseUrl } from '@/lib/utils';
 import type { Category } from '@/types/index';
 import type { ShopOwnerPlan } from '@/lib/supabase-shop-owner-plans';
 
@@ -113,12 +114,13 @@ export const HamburgerMenu = ({ onStaffAccess, onShowLogin }: HamburgerMenuProps
 
   const handleUpdate = () => {
     if (updateData?.apk_url) {
+      const sanitizedUrl = sanitizeSupabaseUrl(updateData.apk_url);
       const alarmBridge = (window as any).AlarmBridge;
       if (alarmBridge && typeof alarmBridge.downloadAndInstallApk === 'function') {
-        alarmBridge.downloadAndInstallApk(updateData.apk_url);
+        alarmBridge.downloadAndInstallApk(sanitizedUrl);
         toast.success('Downloading update... Please follow the installation prompts when finished.');
       } else {
-        window.open(updateData.apk_url, '_blank');
+        window.open(sanitizedUrl, '_blank');
       }
     }
   };
@@ -177,7 +179,7 @@ export const HamburgerMenu = ({ onStaffAccess, onShowLogin }: HamburgerMenuProps
               <div className="border-t pt-2 sm:pt-4 space-y-2">
                 <p className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 sm:mb-3 px-2 flex items-center gap-2">
                   <Store className="h-3 sm:h-4 w-3 sm:w-4" />
-                  Barber Portal
+                  Owner Portal
                 </p>
                 <div className="grid grid-cols-2 gap-1 sm:gap-2">
                   <Button
@@ -553,7 +555,7 @@ export const HamburgerMenu = ({ onStaffAccess, onShowLogin }: HamburgerMenuProps
                 </div>
               </SheetContent>
             </Sheet>
-            <h1 className="text-lg sm:text-2xl font-bold text-primary">Book it</h1>
+            <h1 className="text-lg sm:text-2xl font-bold text-primary">Book It</h1>
           </div>
           <div className="flex items-center gap-1 sm:gap-2">
             {currentUser ? (

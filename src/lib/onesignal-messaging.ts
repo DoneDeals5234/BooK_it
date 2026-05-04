@@ -1,5 +1,5 @@
 const ONESIGNAL_APP_ID = '1f14fad4-0d2f-465a-b3a8-e0e976b8729f';
-const ONESIGNAL_API_KEY = 'os_v2_app_d4kpvvanf5dfvm5i4duxnodst735kymt7txulwnftdubelcq2qw5yu7acbdtxn3ye7af2qsizzhz3jtptubvm4wi46xzpqeh2wn2vvq';
+const ONESIGNAL_API_KEY = 'os_v2_app_d4kpvvanf5dfvm5i4duxnodst76akwxbdjquqneohglqc6iifuuhdn4av55a3hnrju3zbhm52yuf7ga3gzuqhjggxzseurcjfrnmc5y';
 const ONESIGNAL_API_URL = 'https://onesignal.com/api/v1/notifications';
 
 export interface NotificationPayload {
@@ -873,6 +873,40 @@ export async function sendNotificationByUserId(userIds: string[], payload: Notif
     return true;
   } catch (error) {
     console.error('❌ Error sending notification by user ID:', error);
+    return false;
+  }
+}
+
+/**
+ * Send notification with Player ID priority and External ID (User ID) fallback
+ * This satisfies the requirement: player id priority and external id second priority
+ *
+ * @param userId - The recipient's user ID
+ * @param payload - Notification content
+ */
+export async function sendPriorityNotification(userId: string, payload: NotificationPayload): Promise<boolean> {
+  try {
+    if (!userId) {
+      console.error('❌ No userId provided for priority notification');
+      return false;
+    }
+
+    console.log(`🔔 Sending priority notification to user: ${userId}`);
+
+    // Step 1: Try to find player_id from native_devices (PRIORITY 1)
+    const { getPlayerIdFromNativeDevices } = await import('@/lib/supabase-native-devices');
+    const playerId = await getPlayerIdFromNativeDevices(userId);
+
+    if (playerId) {
+      console.log(`✅ Priority 1: Player ID found (${playerId}). Sending via Player ID...`);
+      return await sendNotificationToPlayerIds([playerId], payload);
+    }
+
+    // Step 2: Fallback to External ID / User ID (PRIORITY 2)
+    console.log(`⚠️ Priority 1 failed: No player ID found for ${userId}. Falling back to External ID...`);
+    return await sendNotificationByUserId([userId], payload);
+  } catch (error) {
+    console.error('❌ Error sending priority notification:', error);
     return false;
   }
 }

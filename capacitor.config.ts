@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.bookbarber.app',
-  appName: 'bookbarber',
+  appName: 'Book It',
   webDir: 'dist',
   plugins: {
     OneSignal: {

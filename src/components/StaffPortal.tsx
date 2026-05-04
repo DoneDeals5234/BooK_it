@@ -169,10 +169,16 @@ const DeliveryRequestItem = ({ noti, onHandled }: { noti: any, onHandled: () => 
             className={`text-[9px] font-black h-9 rounded-lg ${order?.book_it_status === 'accepted' ? 'bg-blue-600' : ''}`}
             onClick={async () => {
               if (!order) return;
-              await updateBookItStatus(order.id, 'accepted');
-              const updated = await getOrderById(order.id);
-              setOrder(updated);
-              toast.success('Status: Accepted');
+              try {
+                console.log('🔄 Updating status to accepted for order:', order.id);
+                await updateBookItStatus(order.id, 'accepted');
+                const updated = await getOrderById(order.id);
+                setOrder(updated);
+                toast.success('✅ Status: Accepted');
+              } catch (err) {
+                console.error('❌ Failed to update status:', err);
+                toast.error('Failed to update: ' + (err instanceof Error ? err.message : 'Unknown error'));
+              }
             }}
           >
             ACCEPTED
@@ -183,10 +189,16 @@ const DeliveryRequestItem = ({ noti, onHandled }: { noti: any, onHandled: () => 
             className={`text-[9px] font-black h-9 rounded-lg ${order?.book_it_status === 'picking_up' ? 'bg-blue-600' : ''}`}
             onClick={async () => {
               if (!order) return;
-              await updateBookItStatus(order.id, 'picking_up');
-              const updated = await getOrderById(order.id);
-              setOrder(updated);
-              toast.success('Status: Picking Up');
+              try {
+                console.log('🔄 Updating status to picking_up for order:', order.id);
+                await updateBookItStatus(order.id, 'picking_up');
+                const updated = await getOrderById(order.id);
+                setOrder(updated);
+                toast.success('✅ Status: Picking Up');
+              } catch (err) {
+                console.error('❌ Failed to update status:', err);
+                toast.error('Failed to update: ' + (err instanceof Error ? err.message : 'Unknown error'));
+              }
             }}
           >
             PICKING UP
@@ -197,10 +209,16 @@ const DeliveryRequestItem = ({ noti, onHandled }: { noti: any, onHandled: () => 
             className={`text-[9px] font-black h-9 rounded-lg ${order?.book_it_status === 'delivering' ? 'bg-blue-600' : ''}`}
             onClick={async () => {
               if (!order) return;
-              await updateBookItStatus(order.id, 'delivering');
-              const updated = await getOrderById(order.id);
-              setOrder(updated);
-              toast.success('Status: Delivering');
+              try {
+                console.log('🔄 Updating status to delivering for order:', order.id);
+                await updateBookItStatus(order.id, 'delivering');
+                const updated = await getOrderById(order.id);
+                setOrder(updated);
+                toast.success('✅ Status: Delivering');
+              } catch (err) {
+                console.error('❌ Failed to update status:', err);
+                toast.error('Failed to update: ' + (err instanceof Error ? err.message : 'Unknown error'));
+              }
             }}
           >
             DELIVERING
@@ -211,10 +229,16 @@ const DeliveryRequestItem = ({ noti, onHandled }: { noti: any, onHandled: () => 
             className={`text-[9px] font-black h-9 rounded-lg ${order?.book_it_status === 'delivered' ? 'bg-blue-600' : ''}`}
             onClick={async () => {
               if (!order) return;
-              await updateBookItStatus(order.id, 'delivered');
-              const updated = await getOrderById(order.id);
-              setOrder(updated);
-              toast.success('Status: Delivered');
+              try {
+                console.log('🔄 Updating status to delivered for order:', order.id);
+                await updateBookItStatus(order.id, 'delivered');
+                const updated = await getOrderById(order.id);
+                setOrder(updated);
+                toast.success('✅ Status: Delivered');
+              } catch (err) {
+                console.error('❌ Failed to update status:', err);
+                toast.error('Failed to update: ' + (err instanceof Error ? err.message : 'Unknown error'));
+              }
             }}
           >
             DELIVERED
@@ -512,31 +536,109 @@ export const StaffPortal = ({ onClose }: StaffPortalProps) => {
 
   return (
     <div className="fixed inset-0 bg-background z-50 flex flex-col overflow-hidden">
+      {/* Sticky Header - Always visible */}
+      <div className="shrink-0 bg-background border-b shadow-sm">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="flex items-center gap-4 py-3">
+            <Button variant="ghost" size="icon" onClick={onClose}>
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-bold leading-tight">Staff Portal</h1>
+              <p className="text-xs text-muted-foreground">Manage shops &amp; orders</p>
+            </div>
+          </div>
+
+          {/* Tab Navigation - inside sticky header */}
+          <div
+            className="flex gap-1 overflow-x-auto pb-0 scroll-smooth no-scrollbar"
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+          >
+            <Button
+              variant={currentTab === 'manage' ? 'default' : 'ghost'}
+              onClick={() => setCurrentTab('manage')}
+              size="sm"
+              className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary whitespace-nowrap text-xs"
+            >
+              Manage Shops
+            </Button>
+            <Button
+              variant={currentTab === 'orders' ? 'default' : 'ghost'}
+              onClick={() => setCurrentTab('orders')}
+              size="sm"
+              className="rounded-none border-b-2 whitespace-nowrap text-xs"
+            >
+              <List className="h-3 w-3 mr-1" />
+              All Orders
+            </Button>
+            <Button
+              variant={currentTab === 'mail' ? 'default' : 'ghost'}
+              onClick={() => setCurrentTab('mail')}
+              size="sm"
+              className="rounded-none border-b-2 relative whitespace-nowrap text-xs"
+            >
+              <Mail className="h-3 w-3 mr-1" />
+              Fulfillment Mail
+              {adminNotifications.filter(n => !n.is_read).length > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 text-[10px] text-white font-bold">
+                  {adminNotifications.filter(n => !n.is_read).length}
+                </span>
+              )}
+            </Button>
+            <Button
+              variant={currentTab === 'ordering' ? 'default' : 'ghost'}
+              onClick={() => setCurrentTab('ordering')}
+              size="sm"
+              className="rounded-none border-b-2 whitespace-nowrap text-xs"
+            >
+              Shop Ordering
+            </Button>
+            <Button
+              variant={currentTab === 'inbox' ? 'default' : 'ghost'}
+              onClick={() => setCurrentTab('inbox')}
+              size="sm"
+              className="rounded-none border-b-2 relative whitespace-nowrap text-xs"
+            >
+              Inbox
+              {messages.filter(m => !m.isRead).length > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] text-white font-bold">
+                  {messages.filter(m => !m.isRead).length}
+                </span>
+              )}
+            </Button>
+            <Button
+              variant={currentTab === 'updates' ? 'default' : 'ghost'}
+              onClick={() => setCurrentTab('updates')}
+              size="sm"
+              className="rounded-none border-b-2 whitespace-nowrap text-xs"
+            >
+              <Download className="h-3 w-3 mr-1" />
+              App Updates
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Scrollable Content */}
       <div
         className="flex-1 overflow-y-auto scroll-smooth"
         style={{ WebkitOverflowScrolling: 'touch' }}
       >
         <div className="max-w-6xl mx-auto p-4 sm:p-6 pb-24 space-y-6">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={onClose}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold">Staff Portal</h1>
-            <p className="text-muted-foreground">Manage barbershops</p>
-          </div>
-        </div>
+
 
         <div className="grid md:grid-cols-2 gap-6">
           {/* Add Shop Button */}
           <Card>
             <CardHeader>
-              <CardTitle>Add New Barbershop</CardTitle>
+              <CardTitle>Add New Shop</CardTitle>
               <CardDescription>Create a comprehensive shop listing</CardDescription>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground mb-4">
-                Add a new shop with detailed information including owner contact, barber members, services, images, and location.
+                Add a new shop with detailed information including owner contact, members, services, images, and location.
               </p>
               <Button onClick={() => navigate('/create-shop?source=staff')} className="w-full">
                 <Plus className="mr-2 h-4 w-4" />
@@ -567,73 +669,8 @@ export const StaffPortal = ({ onClose }: StaffPortalProps) => {
 
         <Separator />
 
-        {/* Swipeable Tabs and Content */}
-        <div
-          className="flex flex-col flex-1 min-h-0"
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
-        >
-          {/* Tabs */}
-          <div className="sticky top-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 z-20 flex gap-2 border-b overflow-x-auto py-2 -mx-4 px-4 sm:-mx-6 sm:px-6 scroll-smooth">
-            <Button
-              variant={currentTab === 'manage' ? 'default' : 'ghost'}
-              onClick={() => setCurrentTab('manage')}
-              className="rounded-none border-b-2 whitespace-nowrap"
-            >
-              Manage Shops
-            </Button>
-            <Button
-              variant={currentTab === 'orders' ? 'default' : 'ghost'}
-              onClick={() => setCurrentTab('orders')}
-              className="rounded-none border-b-2 whitespace-nowrap"
-            >
-              <List className="h-4 w-4 mr-2" />
-              All Orders
-            </Button>
-            <Button
-              variant={currentTab === 'mail' ? 'default' : 'ghost'}
-              onClick={() => setCurrentTab('mail')}
-              className="rounded-none border-b-2 relative whitespace-nowrap"
-            >
-              <Mail className="h-4 w-4 mr-2" />
-              Fulfillment Mail
-              {adminNotifications.filter(n => !n.is_read).length > 0 && (
-                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 text-[10px] text-white font-bold">
-                  {adminNotifications.filter(n => !n.is_read).length}
-                </span>
-              )}
-            </Button>
-            <Button
-              variant={currentTab === 'ordering' ? 'default' : 'ghost'}
-              onClick={() => setCurrentTab('ordering')}
-              className="rounded-none border-b-2 whitespace-nowrap"
-            >
-              Shop Ordering
-            </Button>
-            <Button
-              variant={currentTab === 'inbox' ? 'default' : 'ghost'}
-              onClick={() => setCurrentTab('inbox')}
-              className="rounded-none border-b-2 relative whitespace-nowrap"
-            >
-              Inbox
-              {messages.filter(m => !m.isRead).length > 0 && (
-                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] text-white font-bold">
-                  {messages.filter(m => !m.isRead).length}
-                </span>
-              )}
-            </Button>
-            <Button
-              variant={currentTab === 'updates' ? 'default' : 'ghost'}
-              onClick={() => setCurrentTab('updates')}
-              className="rounded-none border-b-2 whitespace-nowrap"
-            >
-              <Download className="h-4 w-4 mr-2" />
-              App Updates
-            </Button>
-          </div>
-
-          <div className="mt-4">
+        {/* Tab Content */}
+        <div className="mt-0">
             <AnimatePresence mode="wait">
               <motion.div
                 key={currentTab}
@@ -732,7 +769,7 @@ export const StaffPortal = ({ onClose }: StaffPortalProps) => {
                 {currentTab === 'manage' && (
                   <Card>
                     <CardHeader>
-                      <CardTitle>All Barbershops ({shops.length})</CardTitle>
+                      <CardTitle>All Shops ({shops.length})</CardTitle>
                       <CardDescription>Manage your shops</CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -759,7 +796,7 @@ export const StaffPortal = ({ onClose }: StaffPortalProps) => {
                                   <p className="text-sm text-muted-foreground">{shop.location}</p>
                                   <p className="text-sm text-muted-foreground mt-1">Owner: {shop.ownerName}</p>
                                   <p className="text-xs text-muted-foreground mt-1">
-                                    {shop.barberMembers.length} barber(s) • {shop.services.length} service(s)
+                                    {shop.barberMembers.length} member(s) • {shop.services.length} service(s)
                                   </p>
                                 </div>
                                 <div className="flex items-center justify-between p-3 bg-muted rounded">
@@ -1187,7 +1224,6 @@ export const StaffPortal = ({ onClose }: StaffPortalProps) => {
               </motion.div>
             </AnimatePresence>
           </div>
-        </div>
         </div>
       </div>
     </div>

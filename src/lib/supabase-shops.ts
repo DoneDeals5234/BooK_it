@@ -1,5 +1,6 @@
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import type { Shop, BarberMember, Service } from '@/lib/shops-storage';
+import { sanitizeSupabaseUrl } from '@/lib/utils';
 
 export const getAllShopsFromSupabase = async (): Promise<Shop[]> => {
   if (!isSupabaseConfigured) {
@@ -17,7 +18,15 @@ export const getAllShopsFromSupabase = async (): Promise<Shop[]> => {
     console.log('📥 Fetching shops from Supabase...');
     const { data, error } = await supabase
       .from('shops')
-      .select('*')
+      .select(
+        'id,name,location,owner_name,owner_email,owner_phone,about,' +
+        'shop_image_url,shop_interior_video_url,location_image_url,location_map_link,' +
+        'latitude,longitude,address,village,district,state,country,' +
+        'password,barber_members,services,is_open,token_booking_paused,' +
+        'opening_time,closing_time,category,category_id,created_at,' +
+        'last_ping_time,display_status,is_pinned,pin_order,' +
+        'is_website_builder_enabled,upi_id,advance_payment_mode'
+      )
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -33,41 +42,51 @@ export const getAllShopsFromSupabase = async (): Promise<Shop[]> => {
 
     console.log('✅ Successfully fetched shops:', data?.length || 0);
 
-    return (data || []).map((item) => ({
-      id: item.id,
-      name: item.name,
-      location: item.location,
-      ownerName: item.owner_name,
-      ownerEmail: item.owner_email,
-      ownerPhone: item.owner_phone,
-      about: item.about,
-      shopImageUrl: item.shop_image_url,
-      shopInteriorVideoUrl: item.shop_interior_video_url,
-      locationImageUrl: item.location_image_url,
-      locationMapLink: item.location_map_link,
-      latitude: item.latitude || null,
-      longitude: item.longitude || null,
-      address: item.address || null,
-      village: item.village || null,
-      district: item.district || null,
-      state: item.state || null,
-      country: item.country || null,
-      password: item.password,
-      barberMembers: typeof item.barber_members === 'string' ? JSON.parse(item.barber_members) : item.barber_members || [],
-      services: typeof item.services === 'string' ? JSON.parse(item.services) : item.services || [],
-      isOpen: item.is_open,
-      tokenBookingPaused: item.token_booking_paused,
-      openingTime: item.opening_time || '09:00',
-      closingTime: item.closing_time || '18:00',
-      category: item.category || 'salon',
-      createdAt: new Date(item.created_at),
-      lastPingTime: item.last_ping_time ? new Date(item.last_ping_time) : null,
-      displayStatus: item.display_status || 'offline',
-      isPinned: item.is_pinned || false,
-      pinOrder: item.pin_order || 999,
-      isWebsiteBuilderEnabled: item.is_website_builder_enabled !== false,
-      isTokenBookingEnabled: item.token_booking_paused !== true,
-    }));
+    return (data || []).map((item) => {
+      const barberMembers = typeof item.barber_members === 'string' ? JSON.parse(item.barber_members) : item.barber_members || [];
+      const sanitizedBarberMembers = barberMembers.map((bm: any) => ({
+        ...bm,
+        imageUrl: sanitizeSupabaseUrl(bm.imageUrl)
+      }));
+
+      return {
+        id: item.id,
+        name: item.name,
+        location: item.location,
+        ownerName: item.owner_name,
+        ownerEmail: item.owner_email,
+        ownerPhone: item.owner_phone,
+        about: item.about,
+        shopImageUrl: sanitizeSupabaseUrl(item.shop_image_url),
+        shopInteriorVideoUrl: sanitizeSupabaseUrl(item.shop_interior_video_url),
+        locationImageUrl: sanitizeSupabaseUrl(item.location_image_url),
+        locationMapLink: item.location_map_link,
+        latitude: item.latitude || null,
+        longitude: item.longitude || null,
+        address: item.address || null,
+        village: item.village || null,
+        district: item.district || null,
+        state: item.state || null,
+        country: item.country || null,
+        password: item.password,
+        barberMembers: sanitizedBarberMembers,
+        services: typeof item.services === 'string' ? JSON.parse(item.services) : item.services || [],
+        isOpen: item.is_open,
+        tokenBookingPaused: item.token_booking_paused,
+        openingTime: item.opening_time || '09:00',
+        closingTime: item.closing_time || '18:00',
+        category: item.category || 'salon',
+        createdAt: new Date(item.created_at),
+        lastPingTime: item.last_ping_time ? new Date(item.last_ping_time) : null,
+        displayStatus: item.display_status || 'offline',
+        isPinned: item.is_pinned || false,
+        pinOrder: item.pin_order || 999,
+        isWebsiteBuilderEnabled: item.is_website_builder_enabled !== false,
+        isTokenBookingEnabled: item.token_booking_paused !== true,
+        upiId: item.upi_id,
+        advancePaymentMode: item.advance_payment_mode || 'none',
+      };
+    });
   } catch (error) {
     console.error('Error in getAllShopsFromSupabase:', error);
     return [];
@@ -93,6 +112,12 @@ export const getShopByIdFromSupabase = async (id: string): Promise<Shop | null> 
 
     if (!data) return null;
 
+    const barberMembers = typeof data.barber_members === 'string' ? JSON.parse(data.barber_members) : data.barber_members || [];
+    const sanitizedBarberMembers = barberMembers.map((bm: any) => ({
+      ...bm,
+      imageUrl: sanitizeSupabaseUrl(bm.imageUrl)
+    }));
+
     return {
       id: data.id,
       name: data.name,
@@ -101,9 +126,9 @@ export const getShopByIdFromSupabase = async (id: string): Promise<Shop | null> 
       ownerEmail: data.owner_email,
       ownerPhone: data.owner_phone,
       about: data.about,
-      shopImageUrl: data.shop_image_url,
-      shopInteriorVideoUrl: data.shop_interior_video_url,
-      locationImageUrl: data.location_image_url,
+      shopImageUrl: sanitizeSupabaseUrl(data.shop_image_url),
+      shopInteriorVideoUrl: sanitizeSupabaseUrl(data.shop_interior_video_url),
+      locationImageUrl: sanitizeSupabaseUrl(data.location_image_url),
       locationMapLink: data.location_map_link,
       latitude: data.latitude || null,
       longitude: data.longitude || null,
@@ -113,7 +138,7 @@ export const getShopByIdFromSupabase = async (id: string): Promise<Shop | null> 
       state: data.state || null,
       country: data.country || null,
       password: data.password,
-      barberMembers: typeof data.barber_members === 'string' ? JSON.parse(data.barber_members) : data.barber_members || [],
+      barberMembers: sanitizedBarberMembers,
       services: typeof data.services === 'string' ? JSON.parse(data.services) : data.services || [],
       isOpen: data.is_open,
       tokenBookingPaused: data.token_booking_paused,
@@ -127,6 +152,8 @@ export const getShopByIdFromSupabase = async (id: string): Promise<Shop | null> 
       pinOrder: data.pin_order || 999,
       isWebsiteBuilderEnabled: data.is_website_builder_enabled !== false,
       isTokenBookingEnabled: data.token_booking_paused !== true,
+      upiId: data.upi_id,
+      advancePaymentMode: data.advance_payment_mode || 'none',
     };
   } catch (error) {
     console.error('Error in getShopByIdFromSupabase:', error);
@@ -171,6 +198,8 @@ export const addShopToSupabase = async (
         category: shop.category || 'salon',
         display_status: 'offline',
         is_website_builder_enabled: true,
+        upi_id: shop.upiId || null,
+        advance_payment_mode: shop.advancePaymentMode || 'none',
       })
       .select()
       .single();
@@ -214,6 +243,8 @@ export const addShopToSupabase = async (
       pinOrder: data.pin_order || 999,
       isWebsiteBuilderEnabled: data.is_website_builder_enabled !== false,
       isTokenBookingEnabled: data.token_booking_paused !== true,
+      upiId: data.upi_id,
+      advancePaymentMode: data.advance_payment_mode || 'none',
     };
   } catch (error) {
     console.error('Error in addShopToSupabase:', JSON.stringify(error, null, 2));
@@ -259,6 +290,8 @@ export const updateShopInSupabase = async (
     if (updates.pinOrder !== undefined) updateData.pin_order = updates.pinOrder;
     if (updates.isWebsiteBuilderEnabled !== undefined) updateData.is_website_builder_enabled = updates.isWebsiteBuilderEnabled;
     if (updates.isTokenBookingEnabled !== undefined) updateData.token_booking_paused = !updates.isTokenBookingEnabled;
+    if (updates.upiId !== undefined) updateData.upi_id = updates.upiId;
+    if (updates.advancePaymentMode !== undefined) updateData.advance_payment_mode = updates.advancePaymentMode;
 
     const { data, error } = await supabase
       .from('shops')
@@ -312,6 +345,8 @@ export const updateShopInSupabase = async (
       pinOrder: shop.pin_order || 999,
       isWebsiteBuilderEnabled: shop.is_website_builder_enabled !== false,
       isTokenBookingEnabled: shop.token_booking_paused !== true,
+      upiId: shop.upi_id || null,
+      advancePaymentMode: shop.advance_payment_mode || 'none',
     };
   } catch (error) {
     console.error('Error in updateShopInSupabase:', JSON.stringify(error, null, 2));
@@ -393,8 +428,8 @@ export const seedDefaultShops = async (): Promise<void> => {
           },
         ]),
         services: JSON.stringify([
-          { id: '1-s1', name: 'Haircut', price: '$25' },
-          { id: '1-s2', name: 'Beard Trim', price: '$15' },
+          { id: '1-s1', name: 'Haircut', price: '₹25' },
+          { id: '1-s2', name: 'Beard Trim', price: '₹15' },
         ]),
         is_open: true,
         token_booking_paused: false,
@@ -421,8 +456,8 @@ export const seedDefaultShops = async (): Promise<void> => {
           },
         ]),
         services: JSON.stringify([
-          { id: '2-s1', name: 'Premium Haircut', price: '$35' },
-          { id: '2-s2', name: 'Beard Design', price: '$20' },
+          { id: '2-s1', name: 'Premium Haircut', price: '₹35' },
+          { id: '2-s2', name: 'Beard Design', price: '₹20' },
         ]),
         is_open: true,
         token_booking_paused: false,

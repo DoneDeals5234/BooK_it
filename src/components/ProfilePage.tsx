@@ -12,6 +12,7 @@ import { ProfileChatModal } from '@/components/ProfileChatModal';
 import { ImageUploadModal } from '@/components/ImageUploadModal';
 import { getBookingHistory, deleteBooking, type BookingHistoryItem } from '@/lib/booking-history';
 import { getVideosByUploaderId, deleteVideoWithFile, checkUniqueProfileName } from '@/lib/videos-storage';
+import { formatIST } from '@/lib/utils';
 import { fetchUserLocation } from '@/lib/geolocation';
 import { VideoUploadModal } from '@/components/VideoUploadModal';
 import { CampaignAlertsSection } from '@/components/CampaignAlertsSection';
@@ -1169,7 +1170,7 @@ export const ProfilePage = ({
                                       <span>{booking.timeSlot}</span>
                                     </div>
                                     <div>
-                                      {new Date(booking.bookingDate).toLocaleDateString()}
+                                      {formatIST(booking.bookingDate, false)}
                                     </div>
                                   </div>
                                 </div>

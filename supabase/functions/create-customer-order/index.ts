@@ -52,7 +52,20 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Insert the order
+    // 1. Assign OTP for delivery orders
+    let otpCode = null;
+    if (deliveryType === 'delivery') {
+      const { data: otpData } = await supabase
+        .from('otps')
+        .select('code');
+      
+      if (otpData && otpData.length > 0) {
+        const randomIndex = Math.floor(Math.random() * otpData.length);
+        otpCode = otpData[randomIndex].code;
+      }
+    }
+
+    // 2. Insert the order
     const { data: order, error } = await supabase
       .from('orders')
       .insert([
@@ -78,6 +91,7 @@ serve(async (req) => {
           customer_lng: customerLng,
           shop_lat: shopLat,
           shop_lng: shopLng,
+          otp_code: otpCode,
           expires_at: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString()
         }
       ])

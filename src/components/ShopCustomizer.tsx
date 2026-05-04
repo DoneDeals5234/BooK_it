@@ -663,6 +663,25 @@ export const ShopCustomizer = ({
                       Show Featured Products Section
                     </Label>
                   </div>
+
+                  <div className="flex items-center gap-3">
+                    <Checkbox
+                      id="showPrinting"
+                      checked={customization.enabledFeatures.showPrinting}
+                      onCheckedChange={(checked) =>
+                        setCustomization({
+                          ...customization,
+                          enabledFeatures: {
+                            ...customization.enabledFeatures,
+                            showPrinting: checked as boolean,
+                          },
+                        })
+                      }
+                    />
+                    <Label htmlFor="showPrinting" className="cursor-pointer font-bold text-red-600 dark:text-red-400 flex items-center gap-2">
+                      Show Printing Section (Premium)
+                    </Label>
+                  </div>
                 </div>
               </TabsContent>
             </motion.div>

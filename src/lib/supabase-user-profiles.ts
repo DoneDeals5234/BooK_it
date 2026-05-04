@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { sanitizeSupabaseUrl } from './utils';
 
 export interface UserProfile {
   id: string;
@@ -63,7 +64,7 @@ export const searchUserProfiles = async (query: string): Promise<UserProfile[]> 
         userId: profile.user_id,
         name: profile.name,
         phone: profile.phone,
-        imageUrl: profile.image_url,
+        imageUrl: sanitizeSupabaseUrl(profile.image_url),
         address: profile.address,
         village: profile.village,
         district: profile.district,
@@ -112,7 +113,7 @@ export const getUserProfile = async (userId: string): Promise<UserProfile | null
       userId: data.user_id,
       name: data.name,
       phone: data.phone,
-      imageUrl: data.image_url,
+      imageUrl: sanitizeSupabaseUrl(data.image_url),
       address: data.address,
       village: data.village,
       district: data.district,

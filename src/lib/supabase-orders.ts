@@ -1,4 +1,6 @@
 import { supabase } from './supabase';
+import { sanitizeSupabaseUrl, formatIST } from './utils';
+import { sendPriorityNotification, sendNotificationToPlayerIds } from './onesignal-messaging';
 
 /**
  * Send notification to user via Supabase Edge Function using their user ID
@@ -6,34 +8,138 @@ import { supabase } from './supabase';
  */
 async function sendOrderNotificationToUser(userId: string, title: string, body: string): Promise<void> {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    const authHeader = session?.access_token ? `Bearer ${session.access_token}` : `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`;
-
-    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-notification-by-userid`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': authHeader,
-      },
-      body: JSON.stringify({
-        user_ids: [userId],
-        title,
-        body,
-        data: {
-          type: 'order_update'
-        }
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.warn('Failed to send order notification:', errorText);
-    } else {
-      console.log('✅ Order notification sent to user:', userId);
-    }
+    // Reusing the priority notification system for consistency
+    await sendPriorityNotification(userId, { title, body });
   } catch (error) {
     console.error('Error sending order notification:', error);
-    // Don't throw - notification failure shouldn't block order operations
+  }
+}
+
+/**
+ * Notify shop owner that a new order has been created
+ */
+async function notifyShopOwnerNewOrder(order: Order): Promise<void> {
+  try {
+    console.log('🔔 Notifying shop owner of new order:', order.id);    // 1. Find all owners for this shop from the 'shop_owners' table
+    // This is the most reliable source for mapping shops to their owners
+    console.log('🔍 Fetching owners for shop:', order.shop_id);
+    const { data: owners, error: ownersError } = await supabase
+      .from('shop_owners')
+      .select('user_id, player_id')
+      .eq('shop_id', order.shop_id);
+
+    if (ownersError) {
+      console.error('❌ Error fetching shop owners:', ownersError);
+      return;
+    }
+
+    if (!owners || owners.length === 0) {
+      console.warn('⚠️ No owners found for shop:', order.shop_id, 'in shop_owners table');
+      // FALLBACK: Try lookup by shop email if table is empty
+      const { data: shopData } = await supabase
+        .from('shops')
+        .select('owner_email')
+        .eq('id', order.shop_id)
+        .single();
+      
+      if (shopData?.owner_email) {
+        console.log('🔄 Fallback: Trying lookup by owner_email:', shopData.owner_email);
+        const { getPlayerIdByEmail } = await import('@/lib/supabase-native-devices');
+        const playerId = await getPlayerIdByEmail(shopData.owner_email);
+        if (playerId) {
+          const payload = {
+            title: 'New Order Received! 🛍️',
+            body: `New order for ₹${order.order_amount} from ${order.customer_name}.`,
+            data: {
+              type: 'new_order',
+              order_id: order.id,
+              customer_name: order.customer_name,
+              amount: order.order_amount.toString(),
+              quantity: order.quantity.toString(),
+              delivery_type: order.delivery_type || 'pickup'
+            }
+          };
+          await sendNotificationToPlayerIds([playerId], payload);
+        }
+      }
+      return;
+    }
+
+    console.log(`✅ Found ${owners.length} owner(s) for shop ${order.shop_id}`);
+
+    // 2. Prepare the notification payload
+    const payload = {
+      title: 'New Order Received! 🛍️',
+      body: `New order for ₹${order.order_amount} from ${order.customer_name}. Click to view details!`,
+      data: {
+        type: 'new_order', // This triggers the Android alarm logic
+        order_id: order.id,
+        customer_name: order.customer_name,
+        amount: order.order_amount.toString(),
+        quantity: order.quantity.toString(),
+        delivery_type: order.delivery_type || 'pickup'
+      }
+    };
+
+    // 3. Send notifications to each owner
+    for (const owner of owners) {
+      try {
+        if (owner.player_id) {
+          console.log(`📤 Sending direct notification to player_id: ${owner.player_id}`);
+          await sendNotificationToPlayerIds([owner.player_id], payload);
+        } else if (owner.user_id) {
+          console.log(`📤 Sending priority notification to user_id: ${owner.user_id}`);
+          await sendPriorityNotification(owner.user_id, payload);
+        }
+      } catch (err) {
+        console.error(`❌ Failed to notify owner ${owner.user_id}:`, err);
+      }
+    }
+    console.log('✅ New order notification sent successfully');
+  } catch (error) {
+    console.error('❌ Error in notifyShopOwnerNewOrder:', error);
+  }
+}
+
+/**
+ * Notify both customer and shop owner that the order is complete
+ * Satisfies: "order complete krne pr customer ko notification jana cahaye... or shop owner ko bhi jana cahaye"
+ */
+async function notifyOrderCompletion(order: Order): Promise<void> {
+  try {
+    console.log('🎉 Notifying completion for order:', order.id);
+
+    // 1. Notify Customer
+    const customerPayload = {
+      title: 'Order Completed! 🎉',
+      body: `Your order of ₹${order.order_amount} from ${order.shop_name || 'the shop'} has been successfully done. Enjoy!`,
+      data: { orderId: order.id, type: 'order_completion' }
+    };
+    await sendPriorityNotification(order.customer_id, customerPayload);
+
+    // 2. Notify All Shop Owners
+    const { data: owners } = await supabase
+      .from('shop_owners')
+      .select('user_id, player_id')
+      .eq('shop_id', order.shop_id);
+
+    if (owners && owners.length > 0) {
+      const ownerPayload = {
+        title: 'Order Successfully Done! ✅',
+        body: `Order of ₹${order.order_amount} for ${order.customer_name} is complete.`,
+        data: { orderId: order.id, type: 'order_completion' }
+      };
+
+      for (const owner of owners) {
+        if (owner.player_id) {
+          await sendNotificationToPlayerIds([owner.player_id], ownerPayload);
+        } else if (owner.user_id) {
+          await sendPriorityNotification(owner.user_id, ownerPayload);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error in notifyOrderCompletion:', error);
   }
 }
 
@@ -67,6 +173,7 @@ export interface Order {
   customer_lng?: number;
   shop_lat?: number;
   shop_lng?: number;
+  shop_name?: string;
   created_at: string;
   updated_at: string;
   accepted_at?: string;
@@ -74,6 +181,11 @@ export interface Order {
   ready_at?: string;
   collected_at?: string;
   expires_at: string;
+  otp_code?: string;
+  is_cancelled?: boolean;
+  cancelled_at?: string;
+  payment_screenshot_url?: string;
+  payment_status?: 'unpaid' | 'pending_verification' | 'paid';
 }
 
 export const REJECTION_REASONS = {
@@ -167,7 +279,10 @@ export async function createOrder(
         throw new Error('Order creation failed: No order data returned');
       }
 
-      data = responseData.order;
+      data = {
+        ...responseData.order,
+        product_image: sanitizeSupabaseUrl(responseData.order.product_image)
+      };
     } catch (fetchError) {
       const fetchMsg = fetchError instanceof Error ? fetchError.message : String(fetchError);
       console.error('❌ Error calling create-customer-order function:', fetchMsg);
@@ -176,7 +291,25 @@ export async function createOrder(
 
     console.log('✅ Order created successfully:', data.id);
 
-    console.log('✅ Order created successfully:', data.id);
+    // 🔔 Notify shop owner about the new order
+    // This triggers the Android Foreground Service / Alarm logic
+    try {
+      notifyShopOwnerNewOrder(data);
+    } catch (notifyError) {
+      console.warn('⚠️ Failed to trigger shop owner notification:', notifyError);
+    }
+
+    // 🔔 Notify customer that order is booked
+    try {
+      await sendOrderNotificationToUser(
+        data.customer_id,
+        'Order Booked! 🛍️',
+        `Your order for ₹${data.order_amount} from ${data.shop_name || 'the shop'} has been successfully booked.`
+      );
+    } catch (notifyError) {
+      console.warn('⚠️ Failed to notify customer:', notifyError);
+    }
+
     return data;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -199,31 +332,56 @@ export async function getPendingOrdersForShop(shopId: string): Promise<Order[]> 
     .order('created_at', { ascending: false });
 
   if (error) throw error;
-  return data || [];
+  return (data || []).map(order => ({
+    ...order,
+    product_image: sanitizeSupabaseUrl(order.product_image)
+  }));
 }
 
-// Get all orders for a shop (owner view)
+// Get all orders for a shop (owner view) - optimized column selection
 export async function getAllOrdersForShop(shopId: string): Promise<Order[]> {
   const { data, error } = await supabase
     .from('orders')
-    .select('*')
+    .select(
+      'id,shop_id,customer_id,customer_name,customer_phone,order_amount,delivery_cost,total_amount,' +
+      'order_description,product_name,product_image,unit_price,quantity,status,delivery_type,' +
+      'delivery_choice,customer_address,location_link,customer_lat,customer_lng,shop_lat,shop_lng,' +
+      'shop_name,created_at,updated_at,accepted_at,rejected_at,ready_at,collected_at,expires_at,' +
+      'rejection_reason,rejection_notes,otp_code,is_cancelled,cancelled_at,fulfillment_status,' +
+      'book_it_status,payment_screenshot_url,payment_status'
+    )
     .eq('shop_id', shopId)
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .limit(150);
 
   if (error) throw error;
-  return data || [];
+  return (data || []).map(order => ({
+    ...order,
+    product_image: sanitizeSupabaseUrl(order.product_image)
+  }));
 }
 
-// Get all orders for a customer
+// Get all orders for a customer - optimized column selection
 export async function getCustomerOrders(customerId: string): Promise<Order[]> {
   const { data, error } = await supabase
     .from('orders')
-    .select('*')
+    .select(
+      'id,shop_id,customer_id,customer_name,customer_phone,order_amount,delivery_cost,total_amount,' +
+      'order_description,product_name,product_image,unit_price,quantity,status,delivery_type,' +
+      'delivery_choice,customer_address,location_link,customer_lat,customer_lng,shop_lat,shop_lng,' +
+      'shop_name,created_at,updated_at,accepted_at,expires_at,rejection_reason,rejection_notes,' +
+      'otp_code,is_cancelled,cancelled_at,fulfillment_status,book_it_status,' +
+      'payment_screenshot_url,payment_status'
+    )
     .eq('customer_id', customerId)
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .limit(80);
 
   if (error) throw error;
-  return data || [];
+  return (data || []).map(order => ({
+    ...order,
+    product_image: sanitizeSupabaseUrl(order.product_image)
+  }));
 }
 
 // Get single order by ID
@@ -235,7 +393,10 @@ export async function getOrderById(orderId: string): Promise<Order> {
     .single();
 
   if (error) throw error;
-  return data;
+  return {
+    ...data,
+    product_image: sanitizeSupabaseUrl(data.product_image)
+  };
 }
 
 // Accept an order
@@ -379,6 +540,7 @@ export async function markOrderOutForDelivery(orderId: string): Promise<Order> {
   return data;
 }
 
+
 // Mark order as delivered (By shop owner for delivery orders)
 export async function markOrderDeliveredByOwner(orderId: string): Promise<Order> {
   const { data, error } = await supabase
@@ -393,13 +555,94 @@ export async function markOrderDeliveredByOwner(orderId: string): Promise<Order>
 
   if (error) throw error;
 
-  // Send notification to customer
   if (data) {
     await sendOrderNotificationToUser(
       data.customer_id,
       'Order Delivered! 🎉',
-      `Your order of ₹${data.order_amount} has been successfully delivered. Enjoy!`
+      `Your order of ₹${data.order_amount} has been delivered. Thank you!`
     );
+  }
+
+  return data;
+}
+
+// Mark order as delivered with OTP verification (Self Delivery)
+export async function markOrderDeliveredWithOtp(orderId: string, otp: string): Promise<Order> {
+  // 1. Verify OTP
+  const { data: order, error: fetchError } = await supabase
+    .from('orders')
+    .select('otp_code')
+    .eq('id', orderId)
+    .single();
+  
+  if (fetchError) throw fetchError;
+  if (!order.otp_code) {
+    throw new Error('No OTP assigned to this order');
+  }
+  if (order.otp_code !== otp) {
+    throw new Error('Invalid OTP. Please check with the customer.');
+  }
+
+  // 2. Mark as delivered
+  const { data, error } = await supabase
+    .from('orders')
+    .update({
+      status: 'delivered',
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', orderId)
+    .select()
+    .single();
+
+  if (error) throw error;
+
+  // Send notification to customer and owner about completion
+  if (data) {
+    await notifyOrderCompletion(data);
+  }
+
+  return data;
+}
+
+// Cancel an order
+export async function cancelOrder(orderId: string): Promise<Order> {
+  const { data, error } = await supabase
+    .from('orders')
+    .update({
+      status: 'rejected',
+      is_cancelled: true,
+      rejection_reason: 'Cancelled by customer',
+      cancelled_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', orderId)
+    .select()
+    .single();
+
+  if (error) throw error;
+
+  // Notify shop owners
+  if (data) {
+    const { data: owners } = await supabase
+      .from('shop_owners')
+      .select('user_id, player_id')
+      .eq('shop_id', data.shop_id);
+
+    if (owners && owners.length > 0) {
+      const payload = {
+        title: 'Order Cancelled ⚠️',
+        body: `Order for ₹${data.order_amount} has been cancelled by ${data.customer_name}.`,
+        data: { orderId: data.id, type: 'order_cancellation' }
+      };
+
+      for (const owner of owners) {
+        if (owner.player_id) {
+          await sendNotificationToPlayerIds([owner.player_id], payload);
+        } else if (owner.user_id) {
+          await sendPriorityNotification(owner.user_id, payload);
+        }
+      }
+    }
   }
 
   return data;
@@ -419,21 +662,44 @@ export async function markOrderDelivered(orderId: string): Promise<Order> {
 
   if (error) throw error;
 
-  // Send notification to shop owner about completion
+  // Send notification to customer and shop owner about completion
   if (data) {
-    const { data: shopData } = await supabase.from('shops').select('owner_email').eq('id', data.shop_id).single();
-    if (shopData?.owner_email) {
-      const { data: profile } = await supabase.from('user_profiles').select('user_id').eq('email', shopData.owner_email).single();
-      if (profile?.user_id) {
-        await sendOrderNotificationToUser(
-          profile.user_id,
-          'Order Completed! 🎉',
-          `${data.customer_name} has marked their order as delivered.`
-        );
-      }
-    }
+    await notifyOrderCompletion(data);
   }
 
+  return data;
+}
+
+// Update order payment screenshot
+export async function updateOrderPaymentScreenshot(orderId: string, screenshotUrl: string): Promise<Order> {
+  const { data, error } = await supabase
+    .from('orders')
+    .update({
+      payment_screenshot_url: screenshotUrl,
+      payment_status: 'pending_verification',
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', orderId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+// Update order payment status (by owner)
+export async function updateOrderPaymentStatus(orderId: string, status: 'unpaid' | 'pending_verification' | 'paid'): Promise<Order> {
+  const { data, error } = await supabase
+    .from('orders')
+    .update({
+      payment_status: status,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', orderId)
+    .select()
+    .single();
+
+  if (error) throw error;
   return data;
 }
 
@@ -454,7 +720,10 @@ export async function updateDeliveryChoice(
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    console.error('❌ updateDeliveryChoice error:', JSON.stringify(error));
+    throw error;
+  }
 
   // If Book-It is chosen, notify staff (this will be picked up by the Staff Portal)
   if (choice === 'book_it') {
@@ -489,7 +758,10 @@ export async function updateBookItStatus(
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    console.error('Error updating order status:', error);
+    throw error;
+  }
 
   // Send notification to customer
   if (data) {
@@ -510,7 +782,11 @@ export async function updateBookItStatus(
       body = 'Your order has been successfully delivered by Book It. Enjoy!';
     }
 
-    await sendOrderNotificationToUser(data.customer_id, title, body);
+    try {
+      await sendOrderNotificationToUser(data.customer_id, title, body);
+    } catch (e) {
+      console.error('Failed to notify user about status update:', e);
+    }
   }
 
   return data;
@@ -535,14 +811,18 @@ export async function updateFulfillmentStatus(
 
   // Notify customer of status update
   if (data) {
-    const statusMessages: Record<FulfillmentStatus, { title: string; body: string }> = {
-      order_accepted: { title: 'Order Accepted! ✅', body: `Your order of ₹${data.order_amount} has been accepted and is being prepared.` },
-      product_picking: { title: 'Picking Your Order 📦', body: `The shop is picking your items for order ₹${data.order_amount}.` },
-      delivery: { title: 'Out for Delivery 🚚', body: `Your order of ₹${data.order_amount} is on its way to you!` },
-      order_complete: { title: 'Order Complete! 🎉', body: `Your order of ₹${data.order_amount} has been completed. Thank you!` },
-    };
-    const msg = statusMessages[fulfillmentStatus];
-    if (msg) await sendOrderNotificationToUser(data.customer_id, msg.title, msg.body);
+    if (fulfillmentStatus === 'order_complete') {
+      await notifyOrderCompletion(data);
+    } else {
+      const statusMessages: Record<FulfillmentStatus, { title: string; body: string }> = {
+        order_accepted: { title: 'Order Accepted! ✅', body: `Your order of ₹${data.order_amount} has been accepted and is being prepared.` },
+        product_picking: { title: 'Picking Your Order 📦', body: `The shop is picking your items for order ₹${data.order_amount}.` },
+        delivery: { title: 'Out for Delivery 🚚', body: `Your order of ₹${data.order_amount} is on its way to you!` },
+        order_complete: { title: 'Order Complete! 🎉', body: `Your order of ₹${data.order_amount} has been completed. Thank you!` },
+      };
+      const msg = statusMessages[fulfillmentStatus];
+      if (msg) await sendOrderNotificationToUser(data.customer_id, msg.title, msg.body);
+    }
   }
 
   return data;
@@ -576,21 +856,9 @@ export async function getOrderCountByStatus(shopId: string): Promise<Record<stri
   return counts;
 }
 
-// Format date for display
+// Format date for display using IST (+5:30)
 export function formatOrderDate(dateString: string): string {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
-
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
-
-  return date.toLocaleDateString();
+  return formatIST(dateString);
 }
 
 // Get status badge color

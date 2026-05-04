@@ -106,11 +106,16 @@ export const VideoUploadModal = ({ onClose, onVideoUploaded, sourceContext = 'vi
 
       const { data, error: uploadError } = await supabase.storage
         .from('videos')
-        .upload(`videos/${fileName}`, videoFile);
+        .upload(fileName, videoFile);
 
       if (uploadError) {
         console.error('Storage upload error:', uploadError);
-        throw new Error(`Storage Error: ${uploadError.message} (${uploadError.error})`);
+        // Special check for path error
+        if (uploadError.message?.includes('relative path')) {
+          const detail = JSON.stringify(uploadError);
+          throw new Error(`Server Storage Config Error: ${uploadError.message}. Details: ${detail}`);
+        }
+        throw new Error(`Storage Error: ${uploadError.message}`);
       }
 
       console.log('Storage upload successful:', data);
@@ -118,7 +123,7 @@ export const VideoUploadModal = ({ onClose, onVideoUploaded, sourceContext = 'vi
       // Get public URL
       const { data: publicData } = supabase.storage
         .from('videos')
-        .getPublicUrl(`videos/${fileName}`);
+        .getPublicUrl(fileName);
       const videoUrl = publicData.publicUrl;
       console.log('Video URL:', videoUrl);
 

@@ -4,9 +4,12 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ShoppingBag, Star, Heart, Search, MessageCircle, User, ShoppingCart, Filter, ArrowLeft } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { getAllActiveProducts } from '@/lib/supabase-marketplace';
+import { getAllActiveProducts, addToCart } from '@/lib/supabase-marketplace';
 import type { FeaturedProduct } from '@/types';
 import type { TabType } from '@/components/HomePage';
+import { useAuth } from '@/contexts/AuthContext';
+import { LocalNotifications } from '@capacitor/local-notifications';
+import { toast } from 'react-hot-toast';
 
 interface BazarTabProps {
   setCurrentTab: (tab: TabType) => void;
@@ -18,6 +21,40 @@ export default function BazarTab({ setCurrentTab, onShowLogin }: BazarTabProps) 
   const [products, setProducts] = useState<FeaturedProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const { user } = useAuth();
+  const [cartCount, setCartCount] = useState(0);
+
+  const handleAddToCart = async (e: React.MouseEvent, productId: string, productName: string) => {
+    e.stopPropagation();
+    if (!user) {
+      if (onShowLogin) onShowLogin();
+      return;
+    }
+    const success = await addToCart(user.uid, productId, 1);
+    if (success) {
+      setCartCount(prev => prev + 1);
+      toast.success('Added to Cart!');
+      
+      try {
+        await LocalNotifications.schedule({
+          notifications: [
+            {
+              title: "Added to Cart 🛒",
+              body: `${productName} has been added to your cart!`,
+              id: new Date().getTime(),
+              schedule: { at: new Date(Date.now() + 500) },
+              smallIcon: "ic_stat_name",
+              largeIcon: "res://drawable/notification_large_icon"
+            }
+          ]
+        });
+      } catch (err) {
+        console.error('Local notification error:', err);
+      }
+    } else {
+      toast.error('Failed to add to cart');
+    }
+  };
 
   useEffect(() => {
     const loadProducts = async () => {
@@ -40,10 +77,10 @@ export default function BazarTab({ setCurrentTab, onShowLogin }: BazarTabProps) 
   );
 
   return (
-    <div className="relative h-screen bg-slate-50 dark:bg-slate-950 flex flex-col overflow-hidden">
+    <div className="relative min-h-full bg-slate-50 dark:bg-slate-950 flex flex-col">
       {/* Header Section - Modern Sticky Header */}
-      <div className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 shadow-sm px-4 pt-10 pb-4">
-        <div className="max-w-2xl mx-auto flex flex-col gap-4">
+      <div className="sticky top-0 z-30 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 shadow-sm px-4 pb-3 pt-4">
+        <div className="max-w-2xl mx-auto flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Button variant="ghost" size="icon" onClick={() => setCurrentTab('explore')} className="rounded-full h-9 w-9">
@@ -53,10 +90,6 @@ export default function BazarTab({ setCurrentTab, onShowLogin }: BazarTabProps) 
             </div>
             
             <div className="flex items-center gap-2">
-              <Button variant="ghost" size="icon" className="relative h-9 w-9 rounded-full text-slate-600">
-                <ShoppingCart className="h-5 w-5" />
-                <span className="absolute top-1 right-1 h-3.5 w-3.5 bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center border-2 border-white">2</span>
-              </Button>
               <div className="h-9 w-9 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200">
                 <User className="h-5 w-5 text-slate-600" />
               </div>
@@ -75,8 +108,19 @@ export default function BazarTab({ setCurrentTab, onShowLogin }: BazarTabProps) 
                 className="w-full pl-10 pr-4 py-2.5 text-sm rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-red-500/10 focus:border-red-500 transition-all font-medium placeholder:text-slate-400"
               />
             </div>
-            <Button variant="outline" size="icon" className="rounded-xl border-slate-200 h-10 w-10 shrink-0">
-              <Filter className="h-4 w-4 text-slate-600" />
+
+            <Button 
+              variant="outline" 
+              size="icon" 
+              onClick={() => navigate('/cart')} 
+              className="relative rounded-xl border-slate-200 h-10 w-10 shrink-0 bg-white"
+            >
+              <ShoppingCart className="h-4 w-4 text-slate-600" />
+              {cartCount > 0 && (
+                <span className="absolute -top-1 -right-1 h-3.5 w-3.5 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center border-2 border-white">
+                  {cartCount > 9 ? '9+' : cartCount}
+                </span>
+              )}
             </Button>
           </div>
         </div>
@@ -141,10 +185,7 @@ export default function BazarTab({ setCurrentTab, onShowLogin }: BazarTabProps) 
                       </div>
                       
                       <Button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/product/${product.id}`);
-                        }}
+                        onClick={(e) => handleAddToCart(e, product.id, product.title)}
                         className="w-full text-xs font-black bg-red-500 hover:bg-red-600 text-white h-10 rounded-xl shadow-lg shadow-red-500/10 transition-all uppercase tracking-widest active:scale-95"
                       >
                         Add to Cart

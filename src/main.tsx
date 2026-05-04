@@ -11,6 +11,17 @@ import { initializeBackButton } from '@/lib/back-button-init'
 console.log('🚀 Initializing app...');
 initializeBackButton();
 
+// Register Service Worker for PWA/Caching
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/service-worker.js').then(registration => {
+      console.log('SW registered: ', registration);
+    }).catch(registrationError => {
+      console.log('SW registration failed: ', registrationError);
+    });
+  });
+}
+
 // Handle global unhandled errors to prevent crashes during initialization
 window.addEventListener('error', (event) => {
   console.error('Global error caught:', event.error);

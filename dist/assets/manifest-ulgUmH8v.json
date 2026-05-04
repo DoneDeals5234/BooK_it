@@ -1,7 +1,7 @@
 {
-  "name": "Book it - Barber Shop Booking",
-  "short_name": "Book it",
-  "description": "Find the perfect barber shop near you and book your appointment",
+  "name": "Book It",
+  "short_name": "Book It",
+  "description": "Find the perfect shop near you and book your appointment",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

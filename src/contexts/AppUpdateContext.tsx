@@ -2,6 +2,8 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import { supabase } from '@/lib/supabase';
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
+import packageJson from '../../package.json';
+import { sanitizeSupabaseUrl } from '@/lib/utils';
 
 export interface AppUpdateData {
   id: number;
@@ -37,7 +39,7 @@ export const AppUpdateProvider = ({ children }: { children: ReactNode }) => {
   const [updateData, setUpdateData] = useState<AppUpdateData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [localVersion, setLocalVersion] = useState('0.0.0');
+  const [localVersion, setLocalVersion] = useState(packageJson.version);
 
   const fetchUpdateData = async () => {
     try {
@@ -48,7 +50,12 @@ export const AppUpdateProvider = ({ children }: { children: ReactNode }) => {
         .single();
 
       if (fetchError) throw fetchError;
-      setUpdateData(data);
+      if (data) {
+        setUpdateData({
+          ...data,
+          apk_url: sanitizeSupabaseUrl(data.apk_url)
+        });
+      }
     } catch (err) {
       console.error('Error fetching app update data:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch update data');
@@ -60,15 +67,15 @@ export const AppUpdateProvider = ({ children }: { children: ReactNode }) => {
   const getLocalVersion = async () => {
     try {
       if (Capacitor.isNativePlatform()) {
+        // On Android/iOS: get the real native versionName from build.gradle
         const info = await CapacitorApp.getInfo();
         if (info?.version) {
           setLocalVersion(info.version);
         }
-      } else {
-        console.log('Running in web environment, local version remains 0.0.0');
       }
+      // On web: localVersion is already set from packageJson.version (line 42)
     } catch (e) {
-      console.log('Error getting app version:', e);
+      console.log('Error getting native app version:', e);
     }
   };
 
@@ -90,7 +97,11 @@ export const AppUpdateProvider = ({ children }: { children: ReactNode }) => {
         { event: '*', schema: 'public', table: 'app_updates' },
         (payload) => {
           if (payload.new) {
-            setUpdateData(payload.new as AppUpdateData);
+            const newData = payload.new as AppUpdateData;
+            setUpdateData({
+              ...newData,
+              apk_url: sanitizeSupabaseUrl(newData.apk_url)
+            });
           }
         }
       )

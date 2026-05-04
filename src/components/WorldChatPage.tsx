@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Send, MessageCircle, LogIn, X, ChevronLeft, Image as ImageIcon, Loader, Reply, Pencil, Trash2 } from 'lucide-react';
+import { Send, MessageCircle, LogIn, X, ChevronLeft, Image as ImageIcon, Loader, Reply, Pencil, Trash2, Download } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserProfile } from '@/contexts/UserProfileContext';
 import { supabase } from '@/lib/supabase';
@@ -59,10 +59,10 @@ export default function WorldChatPage({ onClose, onShowLogin }: WorldChatPagePro
           table: 'world_chat_messages',
         },
         async (payload) => {
-          // Fetch the fully populated message (with reply_to_message)
+          // Fetch the fully populated message (without problematic profiles join)
           const { data } = await supabase
             .from('world_chat_messages')
-            .select('*, profiles(image_url), reply_to_message:world_chat_messages!reply_to(user_name, message)')
+            .select('*, reply_to_message:world_chat_messages!reply_to(user_name, message)')
             .eq('id', payload.new.id)
             .single();
             
@@ -200,7 +200,7 @@ export default function WorldChatPage({ onClose, onShowLogin }: WorldChatPagePro
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!user || !profile) {
+    if (!user) {
       onShowLogin?.();
       return;
     }
@@ -216,16 +216,17 @@ export default function WorldChatPage({ onClose, onShowLogin }: WorldChatPagePro
 
       if (selectedImage) {
         setUploadingImage(true);
-        imageUrl = (await uploadWorldChatImage(selectedImage, user.uid)) || undefined;
-        setUploadingImage(false);
-
-        if (selectedImage && !imageUrl) {
-          toast.error('Failed to upload image. Message will be sent without image.');
+        try {
+          imageUrl = (await uploadWorldChatImage(selectedImage, user.uid)) || undefined;
+        } catch (imgErr) {
+          console.error('Image processing failed:', imgErr);
         }
+        setUploadingImage(false);
       }
 
+      // 1. First, send the message to the database
       const newMessage = await addWorldChatMessage(
-        profile.name,
+        profile?.name || user.email?.split('@')[0] || 'User',
         message.trim(),
         user.email || undefined,
         user.uid,
@@ -234,27 +235,35 @@ export default function WorldChatPage({ onClose, onShowLogin }: WorldChatPagePro
       );
 
       if (newMessage) {
+        // Message sent successfully, clear UI immediately
+        const sentMessage = message.trim();
         setMessage('');
         removeImage();
         setReplyTo(null);
+        setSubmitting(false);
 
-        // Notify in background
+        // 2. Send notification in the background (Independent of UI)
+        // We don't await this, and we don't care if it fails
         sendWorldChatNotification({
-          senderName: profile.name,
-          message: message.trim(),
+          senderName: profile?.name || user.email?.split('@')[0] || 'User',
+          message: sentMessage,
           senderEmail: user.email || undefined,
-        }).catch(err => console.error("Notification failed", err));
+        }).catch(err => {
+          console.warn("Background notification failed (expected for some users):", err);
+        });
+      } else {
+        throw new Error('Failed to save message to database');
       }
     } catch (error) {
       console.error('Error submitting chat:', error);
-      toast.error('Failed to send message');
+      toast.error('Failed to send message. Please try again.');
     } finally {
       setSubmitting(false);
       setUploadingImage(false);
     }
   };
 
-  const userIsLoggedIn = !!user && !!profile;
+  const userIsLoggedIn = !!user;
 
   return (
     <div className="fixed inset-0 bg-slate-50 dark:bg-slate-950 z-50 flex flex-col font-sans h-full w-full">
@@ -377,13 +386,27 @@ export default function WorldChatPage({ onClose, onShowLogin }: WorldChatPagePro
 
                       {/* Image Attachment */}
                       {msg.image_url && (
-                        <div className="mb-2">
+                        <div className="mb-2 group/img relative">
                           <img
                             src={msg.image_url}
                             alt="Attachment"
-                            className="rounded-lg max-h-60 object-cover w-full cursor-pointer hover:opacity-90 transition-opacity"
+                            className="rounded-xl max-h-80 object-cover w-full cursor-pointer border border-white/20 shadow-md transition-transform hover:scale-[1.01]"
                             onClick={() => window.open(msg.image_url, '_blank')}
                           />
+                          <button 
+                            className="absolute bottom-2 right-2 p-2 bg-black/60 hover:bg-black/80 text-white rounded-full backdrop-blur-sm opacity-0 group-hover/img:opacity-100 transition-opacity"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const link = document.createElement('a');
+                              link.href = msg.image_url!;
+                              link.download = `chat-image-${Date.now()}.png`;
+                              document.body.appendChild(link);
+                              link.click();
+                              document.body.removeChild(link);
+                            }}
+                          >
+                            <Download className="h-4 w-4" />
+                          </button>
                         </div>
                       )}
 
