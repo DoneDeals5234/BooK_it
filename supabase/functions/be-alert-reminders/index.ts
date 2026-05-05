@@ -6,7 +6,7 @@ const ONESIGNAL_APP_ID =
   "1f14fad4-0d2f-465a-b3a8-e0e976b8729f";
 const ONESIGNAL_API_KEY =
   Deno.env.get("ONESIGNAL_NATIVE_API_KEY") ||
-  "os_v2_app_d4kpvvanf5dfvm5i4duxnodst735kymt7txulwnftdubelcq2qw5yu7acbdtxn3ye7af2qsizzhz3jtptubvm4wi46xzpqeh2wn2vvq";
+  "os_v2_app_d4kpvvanf5dfvm5i4duxnodst5kkr67zyxkuwj44vlvi2y6pjyotclk455gx4phg4ou4w7pf3qed6af3imveg4gj55nt4ohgc3kyd4a";
 const ONESIGNAL_API_URL = "https://onesignal.com/api/v1/notifications";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "https://database.donedeals.shop";
 const SUPABASE_SERVICE_KEY = Deno.env.get("SERVICE_ROLE_KEY") || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ta3JmZWh1dmZ0bnR1cWpteHFxIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTkwNDM4MywiZXhwIjoyMDc3NDgwMzgzfQ.XGaLped_nvzTiQnycJHnodgYGb2QIA5N_-f3Qe8K3Xo";

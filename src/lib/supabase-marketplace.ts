@@ -122,6 +122,21 @@ export const getSimilarProducts = async (shopId: string, currentProductId: strin
 
 // Cart
 export const addToCart = async (userId: string, productId: string, quantity: number = 1): Promise<boolean> => {
+  const { data: existing } = await supabase
+    .from('cart_items')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('product_id', productId)
+    .single();
+
+  if (existing) {
+    const { error } = await supabase
+      .from('cart_items')
+      .update({ quantity: existing.quantity + quantity })
+      .eq('id', existing.id);
+    return !error;
+  }
+
   const { error } = await supabase
     .from('cart_items')
     .insert({ user_id: userId, product_id: productId, quantity });
@@ -131,6 +146,55 @@ export const addToCart = async (userId: string, productId: string, quantity: num
     return false;
   }
   return true;
+};
+
+export const getCartItems = async (userId: string): Promise<CartItem[]> => {
+  const { data, error } = await supabase
+    .from('cart_items')
+    .select('*, product:featured_products(*)')
+    .eq('user_id', userId);
+
+  if (error) {
+    console.error('Error fetching cart items:', error);
+    return [];
+  }
+
+  return (data || []).map(item => ({
+    id: item.id,
+    userId: item.user_id,
+    productId: item.product_id,
+    quantity: item.quantity,
+    createdAt: new Date(item.created_at),
+    product: item.product ? {
+      id: item.product.id,
+      shopId: item.product.shop_id,
+      title: item.product.title,
+      price: item.product.price,
+      imageUrl: item.product.image_url,
+      isActive: item.product.is_active,
+      createdAt: new Date(item.product.created_at),
+      updatedAt: new Date(item.product.updated_at),
+    } : undefined
+  }));
+};
+
+export const updateCartQuantity = async (userId: string, productId: string, quantity: number): Promise<boolean> => {
+  if (quantity <= 0) {
+    const { error } = await supabase
+      .from('cart_items')
+      .delete()
+      .eq('user_id', userId)
+      .eq('product_id', productId);
+    return !error;
+  }
+
+  const { error } = await supabase
+    .from('cart_items')
+    .update({ quantity })
+    .eq('user_id', userId)
+    .eq('product_id', productId);
+
+  return !error;
 };
 
 // Orders

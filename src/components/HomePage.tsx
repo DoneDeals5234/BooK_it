@@ -414,9 +414,11 @@ export default function HomePage({ onShowLogin }: HomePageProps) {
     return null;
   }
 
-  // If bazar tab is selected, render BazarTab
+  // If bazar tab is selected, navigate to /bazar route for proper back button
   if (currentTab === 'bazar') {
-    return <BazarTab setCurrentTab={setCurrentTab} onShowLogin={onShowLogin} />;
+    navigate('/bazar');
+    setCurrentTab('explore');
+    return null;
   }
 
   // If offers tab is selected, render OffersTab

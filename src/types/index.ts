@@ -24,6 +24,7 @@ export interface FeaturedProduct {
   price: number;
   originalPrice?: number;
   discountPercentage?: number;
+  category?: string;
   imageUrl: string;
   description?: string;
   isActive: boolean;

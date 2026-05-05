@@ -22,7 +22,7 @@ const ONESIGNAL_NATIVE_APP_ID =
 
 const ONESIGNAL_API_KEY =
   import.meta.env.VITE_ONESIGNAL_NATIVE_API_KEY ||
-  "os_v2_app_d4kpvvanf5dfvm5i4duxnodst735kymt7txulwnftdubelcq2qw5yu7acbdtxn3ye7af2qsizzhz3jtptubvm4wi46xzpqeh2wn2vvq";
+  "os_v2_app_d4kpvvanf5dfvm5i4duxnodst76akwxbdjquqneohglqc6iifuuhdn4av55a3hnrju3zbhm52yuf7ga3gzuqhjggxzseurcjfrnmc5y";
 
 /**
  * Sends a campaign via the send-realtime-campaign Edge Function

@@ -6,7 +6,7 @@ const ONESIGNAL_NATIVE_APP_ID =
   "1f14fad4-0d2f-465a-b3a8-e0e976b8729f";
 const ONESIGNAL_NATIVE_API_KEY =
   Deno.env.get("ONESIGNAL_NATIVE_API_KEY") ||
-  "os_v2_app_d4kpvvanf5dfvm5i4duxnodst735kymt7txulwnftdubelcq2qw5yu7acbdtxn3ye7af2qsizzhz3jtptubvm4wi46xzpqeh2wn2vvq";
+  "os_v2_app_d4kpvvanf5dfvm5i4duxnodst5kkr67zyxkuwj44vlvi2y6pjyotclk455gx4phg4ou4w7pf3qed6af3imveg4gj55nt4ohgc3kyd4a";
 
 const ONESIGNAL_WEB_APP_ID =
   Deno.env.get("ONESIGNAL_WEB_APP_ID") ||
@@ -144,7 +144,7 @@ serve(async (req: Request) => {
     }
 
     console.log(`📊 Query result: ${matchedUsers?.length || 0} matching user(s) found`);
-    
+
     if (matchedUsers && matchedUsers.length > 0) {
       console.log(`✅ Sample of matched user IDs: ${matchedUsers.slice(0, 5).map(u => u.user_id).join(', ')}`);
     }

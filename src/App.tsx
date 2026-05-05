@@ -23,6 +23,7 @@ const CreateShopPage = lazy(() => import('@/components/CreateShopPage').then(m =
 const WorldChatPage = lazy(() => import('@/components/WorldChatPage'));
 const OffersListPage = lazy(() => import('@/components/OffersListPage').then(m => ({ default: m.OffersListPage })));
 const CartPage = lazy(() => import('@/components/CartPage'));
+const BazarTab = lazy(() => import('@/components/BazarTab'));
 
 import { BookingModalNew } from '@/components/BookingModalNew';
 import { CategoryShopsPage } from '@/components/CategoryShopsPage';
@@ -368,6 +369,7 @@ function AppContentInner() {
           <Route path="/product/:productId" element={<ProductDetailsPage />} />
           <Route path="/offers-list" element={<OffersListPage />} />
           <Route path="/cart" element={<CartPage />} />
+          <Route path="/bazar" element={<BazarTab onShowLogin={() => setShowLoginPopup(true)} />} />
         </Routes>
       </Suspense>
     </div>

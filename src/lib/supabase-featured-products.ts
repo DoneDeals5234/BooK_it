@@ -22,6 +22,7 @@ export const getFeaturedProductsByShopId = async (shopId: string): Promise<Featu
     price: item.price,
     originalPrice: item.original_price,
     discountPercentage: item.discount_percentage,
+    category: item.category,
     imageUrl: item.image_url,
     description: item.description,
     isActive: item.is_active,
@@ -51,6 +52,7 @@ export const getFeaturedProductById = async (productId: string): Promise<Feature
     price: data.price,
     originalPrice: data.original_price,
     discountPercentage: data.discount_percentage,
+    category: data.category,
     imageUrl: data.image_url,
     description: data.description,
     isActive: data.is_active,
@@ -68,7 +70,8 @@ export const addFeaturedProduct = async (
   imageUrl: string,
   description?: string,
   originalPrice?: number,
-  discountPercentage?: number
+  discountPercentage?: number,
+  category?: string
 ): Promise<FeaturedProduct | null> => {
   // Validate image size (warn if larger than 2MB as base64)
   if (imageUrl.startsWith('data:')) {
@@ -86,6 +89,7 @@ export const addFeaturedProduct = async (
       price,
       original_price: originalPrice,
       discount_percentage: discountPercentage,
+      category: category,
       image_url: imageUrl,
       description,
       is_active: true,
@@ -112,6 +116,7 @@ export const addFeaturedProduct = async (
     price: data.price,
     originalPrice: data.original_price,
     discountPercentage: data.discount_percentage,
+    category: data.category,
     imageUrl: data.image_url,
     description: data.description,
     isActive: data.is_active,
@@ -132,6 +137,7 @@ export const updateFeaturedProduct = async (
   if (updates.price !== undefined) updateData.price = updates.price;
   if (updates.originalPrice !== undefined) updateData.original_price = updates.originalPrice;
   if (updates.discountPercentage !== undefined) updateData.discount_percentage = updates.discountPercentage;
+  if (updates.category !== undefined) updateData.category = updates.category;
   if (updates.imageUrl !== undefined) updateData.image_url = updates.imageUrl;
   if (updates.description !== undefined) updateData.description = updates.description;
   if (updates.isActive !== undefined) updateData.is_active = updates.isActive;
@@ -156,6 +162,7 @@ export const updateFeaturedProduct = async (
     price: data.price,
     originalPrice: data.original_price,
     discountPercentage: data.discount_percentage,
+    category: data.category,
     imageUrl: data.image_url,
     description: data.description,
     isActive: data.is_active,

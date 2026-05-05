@@ -345,6 +345,9 @@ export function ProductDetailsPage() {
         productName={product.title}
         productPrice={product.price}
         productImage={product.imageUrl}
+        shopLat={product.latitude || undefined}
+        shopLng={product.longitude || undefined}
+        shopMapLink={product.shopMapLink || undefined}
       />
     </div>
   );

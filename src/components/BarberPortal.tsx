@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
 import { 
   Eye, 
   Settings, 
@@ -116,7 +117,7 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
   const [editingBarber, setEditingBarber] = useState<string | null>(null);
 
   const [featuredProducts, setFeaturedProducts] = useState<FeaturedProduct[]>([]);
-  const [newFeaturedProduct, setNewFeaturedProduct] = useState({ title: '', price: '', originalPrice: '', discountPercentage: '', imageUrl: '' });
+  const [newFeaturedProduct, setNewFeaturedProduct] = useState({ title: '', price: '', originalPrice: '', discountPercentage: '', category: '', imageUrl: '' });
   const [editingProduct, setEditingProduct] = useState<string | null>(null);
   const [loadingProducts, setLoadingProducts] = useState(false);
 
@@ -430,33 +431,117 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
     toast.success(`${getCategoryName()} removed`);
   };
 
-  // Featured Products Handlers
+  const handleEditProduct = (product: FeaturedProduct) => {
+    setEditingProduct(product.id);
+    setNewFeaturedProduct({
+      title: product.title,
+      price: product.price.toString(),
+      originalPrice: product.originalPrice?.toString() || '',
+      discountPercentage: product.discountPercentage?.toString() || '',
+      category: product.category || '',
+      imageUrl: product.imageUrl
+    });
+    // Scroll to form
+    const formElement = document.getElementById('product-form');
+    if (formElement) formElement.scrollIntoView({ behavior: 'smooth' });
+  };
+
   const handleAddFeaturedProduct = async () => {
-    if (!selectedShop || !newFeaturedProduct.title || !newFeaturedProduct.price || !newFeaturedProduct.imageUrl) {
-      toast.error('Please fill in all product fields including image');
+    if (!selectedShop || !newFeaturedProduct.title || !newFeaturedProduct.price) {
+      toast.error('Please fill in all required fields');
       return;
     }
 
     try {
-      const result = await addFeaturedProduct(
-        selectedShop.id,
-        newFeaturedProduct.title,
-        parseFloat(newFeaturedProduct.price),
-        newFeaturedProduct.imageUrl,
-        undefined, // description
-        newFeaturedProduct.originalPrice ? parseFloat(newFeaturedProduct.originalPrice) : undefined,
-        newFeaturedProduct.discountPercentage ? parseInt(newFeaturedProduct.discountPercentage) : undefined
-      );
+      setLoadingProducts(true);
+      const { supabase } = await import('@/lib/supabase');
+      
+      const { data, error } = await supabase
+        .from('featured_products')
+        .insert({
+          shop_id: selectedShop.id,
+          title: newFeaturedProduct.title,
+          price: parseFloat(newFeaturedProduct.price),
+          image_url: newFeaturedProduct.imageUrl || 'https://images.unsplash.com/photo-1506484381205-f7945653044d?w=400',
+          original_price: newFeaturedProduct.originalPrice ? parseFloat(newFeaturedProduct.originalPrice) : null,
+          discount_percentage: newFeaturedProduct.discountPercentage ? parseInt(newFeaturedProduct.discountPercentage) : null,
+          category: newFeaturedProduct.category || 'other'
+        })
+        .select()
+        .single();
 
-      if (result) {
-        setFeaturedProducts([...featuredProducts, result]);
-        setNewFeaturedProduct({ title: '', price: '', originalPrice: '', discountPercentage: '', imageUrl: '' });
-        toast.success('Featured product added successfully!');
+      if (error) throw error;
+
+      if (data) {
+        const product: FeaturedProduct = {
+          id: data.id,
+          shopId: data.shop_id,
+          title: data.title,
+          price: data.price,
+          imageUrl: data.image_url,
+          originalPrice: data.original_price,
+          discountPercentage: data.discount_percentage,
+          category: data.category
+        };
+        setFeaturedProducts([...featuredProducts, product]);
+        setNewFeaturedProduct({ title: '', price: '', originalPrice: '', discountPercentage: '', category: '', imageUrl: '' });
+        toast.success('Product added successfully!');
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to add featured product';
-      console.error('Error adding featured product:', error);
-      toast.error(errorMessage);
+      console.error('Error adding product:', error);
+      toast.error('Failed to add product');
+    } finally {
+      setLoadingProducts(false);
+    }
+  };
+
+  const handleUpdateFeaturedProduct = async () => {
+    if (!selectedShop || !editingProduct || !newFeaturedProduct.title || !newFeaturedProduct.price) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    try {
+      setLoadingProducts(true);
+      const { supabase } = await import('@/lib/supabase');
+
+      const { data, error } = await supabase
+        .from('featured_products')
+        .update({
+          title: newFeaturedProduct.title,
+          price: parseFloat(newFeaturedProduct.price),
+          image_url: newFeaturedProduct.imageUrl,
+          original_price: newFeaturedProduct.originalPrice ? parseFloat(newFeaturedProduct.originalPrice) : null,
+          discount_percentage: newFeaturedProduct.discountPercentage ? parseInt(newFeaturedProduct.discountPercentage) : null,
+          category: newFeaturedProduct.category
+        })
+        .eq('id', editingProduct)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        const updatedProduct: FeaturedProduct = {
+          id: data.id,
+          shopId: data.shop_id,
+          title: data.title,
+          price: data.price,
+          imageUrl: data.image_url,
+          originalPrice: data.original_price,
+          discountPercentage: data.discount_percentage,
+          category: data.category
+        };
+        setFeaturedProducts(featuredProducts.map(p => p.id === editingProduct ? updatedProduct : p));
+        setEditingProduct(null);
+        setNewFeaturedProduct({ title: '', price: '', originalPrice: '', discountPercentage: '', category: '', imageUrl: '' });
+        toast.success('Product updated successfully!');
+      }
+    } catch (error) {
+      console.error('Error updating product:', error);
+      toast.error('Failed to update product');
+    } finally {
+      setLoadingProducts(false);
     }
   };
 
@@ -464,13 +549,19 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
     if (!confirm('Are you sure you want to delete this product?')) return;
 
     try {
-      await deleteFeaturedProduct(productId);
+      const { supabase } = await import('@/lib/supabase');
+      const { error } = await supabase
+        .from('featured_products')
+        .delete()
+        .eq('id', productId);
+
+      if (error) throw error;
+
       setFeaturedProducts(featuredProducts.filter((p) => p.id !== productId));
       toast.success('Featured product deleted successfully!');
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to delete featured product';
       console.error('Error deleting featured product:', error);
-      toast.error(errorMessage);
+      toast.error('Failed to delete featured product');
     }
   };
 
@@ -651,6 +742,17 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
 
     // BASIC plan has standard access
     return planName === 'basic' && !basicTabs.includes(tab);
+  };
+
+  const getFilteredProducts = (searchQuery: string, activeCategory: string) => {
+    let filtered = featuredProducts;
+    if (searchQuery) {
+      filtered = filtered.filter(p => p.title.toLowerCase().includes(searchQuery.toLowerCase()));
+    }
+    if (activeCategory) {
+      filtered = filtered.filter(p => (p.category || getProductCategory(p.title)) === activeCategory);
+    }
+    return filtered;
   };
 
   const generateGoogleMapsLink = (latitude?: number, longitude?: number): string | null => {
@@ -1934,6 +2036,24 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
                               className="text-sm"
                             />
                           </div>
+                          <div className="space-y-1">
+                            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Category</Label>
+                            <select
+                              value={newFeaturedProduct.category}
+                              onChange={(e) => setNewFeaturedProduct({ ...newFeaturedProduct, category: e.target.value })}
+                              className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                            >
+                              <option value="">Auto-categorize</option>
+                              <option value="dairy">Dairy & Bakery</option>
+                              <option value="snacks">Snacks & Munchies</option>
+                              <option value="beverages">Cold Drinks & Juices</option>
+                              <option value="instant">Instant Food</option>
+                              <option value="grocery">Atta, Rice & Dal</option>
+                              <option value="household">Cleaning & Household</option>
+                              <option value="personal">Personal Care</option>
+                              <option value="other">Other</option>
+                            </select>
+                          </div>
                           <div className="space-y-2">
                             <Label className="text-xs sm:text-sm">Product Image</Label>
                             {newFeaturedProduct.imageUrl ? (
@@ -1969,10 +2089,30 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
                               className="hidden"
                             />
                           </div>
-                          <Button onClick={handleAddFeaturedProduct} className="w-full">
-                            <Plus className="mr-2 h-4 w-4" />
-                            Add Featured Product
-                          </Button>
+                          <div id="product-form" className="flex gap-2">
+                            {editingProduct ? (
+                              <>
+                                <Button onClick={handleUpdateFeaturedProduct} className="flex-1">
+                                  <CheckCircle className="mr-2 h-4 w-4" />
+                                  Update Product
+                                </Button>
+                                <Button 
+                                  variant="outline" 
+                                  onClick={() => {
+                                    setEditingProduct(null);
+                                    setNewFeaturedProduct({ title: '', price: '', originalPrice: '', discountPercentage: '', imageUrl: '' });
+                                  }}
+                                >
+                                  Cancel
+                                </Button>
+                              </>
+                            ) : (
+                              <Button onClick={handleAddFeaturedProduct} className="w-full">
+                                <Plus className="mr-2 h-4 w-4" />
+                                Add Featured Product
+                              </Button>
+                            )}
+                          </div>
                         </div>
 
                         {/* Featured Products List */}
@@ -1996,15 +2136,30 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
                                         -{product.discountPercentage}%
                                       </div>
                                     )}
-                                    <button
-                                      onClick={() => handleDeleteFeaturedProduct(product.id)}
-                                      className="absolute top-1 right-1 bg-white/80 hover:bg-red-500 hover:text-white text-red-500 p-1.5 rounded-full transition-all shadow-sm opacity-0 group-hover:opacity-100"
-                                    >
-                                      <Trash2 className="h-3 w-3" />
-                                    </button>
+                                    <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                                      <button
+                                        onClick={() => handleEditProduct(product)}
+                                        className="bg-white/80 hover:bg-primary hover:text-white text-primary p-1.5 rounded-full shadow-sm"
+                                      >
+                                        <Edit className="h-3 w-3" />
+                                      </button>
+                                      <button
+                                        onClick={() => handleDeleteFeaturedProduct(product.id)}
+                                        className="bg-white/80 hover:bg-red-500 hover:text-white text-red-500 p-1.5 rounded-full shadow-sm"
+                                      >
+                                        <Trash2 className="h-3 w-3" />
+                                      </button>
+                                    </div>
                                   </div>
                                   <CardContent className="p-2 space-y-1">
-                                    <h5 className="font-bold text-[11px] line-clamp-1 text-slate-700 dark:text-slate-200">{product.title}</h5>
+                                    <div className="flex items-center justify-between">
+                                      <h5 className="font-bold text-[11px] line-clamp-1 text-slate-700 dark:text-slate-200">{product.title}</h5>
+                                      {product.category && (
+                                        <Badge variant="outline" className="text-[8px] h-3.5 px-1 bg-slate-100 border-none uppercase font-black text-slate-500">
+                                          {product.category}
+                                        </Badge>
+                                      )}
+                                    </div>
                                     <div className="flex items-baseline gap-1.5">
                                       <span className="text-[13px] font-black text-red-600">₹{product.price}</span>
                                       {product.originalPrice && (
