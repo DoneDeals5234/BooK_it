@@ -5,7 +5,6 @@ const ONESIGNAL_NATIVE_APP_ID =
   Deno.env.get("ONESIGNAL_NATIVE_APP_ID") ||
   "1f14fad4-0d2f-465a-b3a8-e0e976b8729f";
 const ONESIGNAL_NATIVE_API_KEY =
-  Deno.env.get("ONESIGNAL_NATIVE_API_KEY") ||
   "os_v2_app_d4kpvvanf5dfvm5i4duxnodst5kkr67zyxkuwj44vlvi2y6pjyotclk455gx4phg4ou4w7pf3qed6af3imveg4gj55nt4ohgc3kyd4a";
 
 const ONESIGNAL_WEB_APP_ID =
@@ -13,7 +12,7 @@ const ONESIGNAL_WEB_APP_ID =
   "f2c5559b-9e99-4aa0-8924-237469824a88";
 const ONESIGNAL_WEB_API_KEY =
   Deno.env.get("ONESIGNAL_WEB_API_KEY") ||
-  "os_v2_app_6lcvlg46tffkbcjeen2gtaskrdv4e3u7e6cett55chp4tx5q4lddeibep5tzatwennibpbuty5ug462f7kia7vwks5ktcotovthz6ma";
+  "os_v2_app_d4kpvvanf5dfvm5i4duxnodst5kkr67zyxkuwj44vlvi2y6pjyotclk455gx4phg4ou4w7pf3qed6af3imveg4gj55nt4ohgc3kyd4a";
 const ONESIGNAL_API_URL = "https://onesignal.com/api/v1/notifications";
 
 function corsHeaders() {
@@ -113,7 +112,7 @@ serve(async (req: Request) => {
       method: "POST",
       headers: {
         "Content-Type": "application/json; charset=utf-8",
-        Authorization: `Basic ${apiKey}`,
+        Authorization: `Key ${apiKey}`,
       },
       body: JSON.stringify(payload),
     });
@@ -147,3 +146,5 @@ serve(async (req: Request) => {
     );
   }
 });
+
+

@@ -62,6 +62,51 @@ export const getAllActiveProducts = async (): Promise<FeaturedProduct[]> => {
   }));
 };
 
+// Phased Fetching Functions for Ultra-fast Chunked Loading
+export const getProductsPhase1 = async (offset = 0, limit = 10) => {
+  const { data, error } = await supabase
+    .from('featured_products')
+    .select('id, title, created_at')
+    .eq('is_active', true)
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1);
+    
+  if (error) {
+    console.error('Error in Phase 1:', error);
+    return [];
+  }
+  return data;
+};
+
+export const getProductsPhase2 = async (ids: string[]) => {
+  if (!ids || ids.length === 0) return [];
+  const { data, error } = await supabase
+    .from('featured_products')
+    .select('id, price, original_price, discount_percentage')
+    .in('id', ids);
+    
+  if (error) {
+    console.error('Error in Phase 2:', error);
+    return [];
+  }
+  return data;
+};
+
+export const getProductsPhase3 = async (ids: string[]) => {
+  if (!ids || ids.length === 0) return [];
+  const { data, error } = await supabase
+    .from('featured_products')
+    .select('id, image_url, images, description, shop_id, category')
+    .in('id', ids);
+    
+  if (error) {
+    console.error('Error in Phase 3:', error);
+    return [];
+  }
+  return data;
+};
+
+
 export const getProductById = async (productId: string): Promise<FeaturedProduct | null> => {
   const { data, error } = await supabase
     .from('featured_products')
@@ -82,6 +127,7 @@ export const getProductById = async (productId: string): Promise<FeaturedProduct
     originalPrice: data.original_price,
     discountPercentage: data.discount_percentage,
     imageUrl: data.image_url,
+    images: data.images || [],
     description: data.description,
     isActive: data.is_active,
     displayOrder: data.display_order,

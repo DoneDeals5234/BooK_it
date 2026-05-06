@@ -27,6 +27,7 @@ export function ProductDetailsPage() {
   const [similarProducts, setSimilarProducts] = useState<FeaturedProduct[]>([]);
   const [reviews, setReviews] = useState<ProductReview[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
   
   // Order Modal state
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
@@ -40,23 +41,43 @@ export function ProductDetailsPage() {
     if (!productId) return;
 
     const loadData = async () => {
-      setLoading(true);
+      // 1. Instant Load from Cache
+      const cached = localStorage.getItem('bazar_products_cache');
+      let foundInCache = false;
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached) as FeaturedProduct[];
+          const cachedProduct = parsed.find(p => p.id === productId);
+          if (cachedProduct && cachedProduct.imageUrl) {
+            setProduct(cachedProduct);
+            if (cachedProduct.shopId) {
+              getShopById(cachedProduct.shopId).then(shopInfo => {
+                if (shopInfo) setShopName(shopInfo.name);
+              });
+            }
+            setLoading(false); // Stop spinner immediately
+            foundInCache = true;
+          }
+        } catch (e) {}
+      }
+
+      if (!foundInCache) setLoading(true);
+
+      // 2. Background Fetch for Reviews, Similar Products, and fresh data
       try {
         const fetchedProduct = await getProductById(productId);
         if (fetchedProduct) {
-          setProduct(fetchedProduct);
+          if (!foundInCache) setProduct(fetchedProduct);
           
           // Load shop info
           const shopInfo = await getShopById(fetchedProduct.shopId);
           if (shopInfo) setShopName(shopInfo.name);
 
           // Load similar products
-          const similar = await getSimilarProducts(fetchedProduct.shopId, productId);
-          setSimilarProducts(similar);
+          getSimilarProducts(fetchedProduct.shopId, productId).then(setSimilarProducts);
 
           // Load reviews
-          const fetchedReviews = await getProductReviews(productId);
-          setReviews(fetchedReviews);
+          getProductReviews(productId).then(setReviews);
         }
       } catch (error) {
         console.error('Error loading product details:', error);
@@ -154,8 +175,9 @@ export function ProductDetailsPage() {
     );
   }
 
-  const originalPrice = product.price + Math.floor(product.price * 0.2);
-  const discountStr = "-20%";
+  const originalPrice = product.originalPrice || product.price + Math.floor(product.price * 0.2);
+  const discount = product.discountPercentage || (product.originalPrice ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100) : 0);
+  const discountStr = discount > 0 ? `${discount}%` : '';
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24 font-sans">
@@ -178,15 +200,41 @@ export function ProductDetailsPage() {
 
       <div className="max-w-2xl mx-auto pt-16">
         {/* Product Image */}
-        <div className="relative aspect-square w-full bg-white dark:bg-slate-800">
-          <img 
-            src={product.imageUrl} 
-            alt={product.title} 
-            className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-normal p-4" 
-          />
-          <div className="absolute top-4 left-4 bg-red-600 text-white font-black px-3 py-1 rounded-lg shadow-md text-sm">
-            {discountStr} OFF
+        <div className="relative w-full bg-white dark:bg-slate-800">
+          <div className="aspect-square relative">
+            <img 
+              src={product.images && product.images.length > 0 ? product.images[activeImageIndex] : product.imageUrl} 
+              alt={product.title} 
+              className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-normal p-4 transition-all duration-300" 
+              onError={(e) => { (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400'; }}
+            />
           </div>
+          
+          {/* Thumbnails if multiple images exist */}
+          {product.images && product.images.length > 1 && (
+            <div className="flex gap-2 p-4 overflow-x-auto no-scrollbar">
+              {product.images.map((img, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setActiveImageIndex(idx)}
+                  className={`relative h-16 w-16 rounded-xl border-2 overflow-hidden shrink-0 transition-all ${activeImageIndex === idx ? 'border-red-500 shadow-md scale-105' : 'border-slate-200 opacity-70 hover:opacity-100'}`}
+                >
+                  <img 
+                    src={img} 
+                    alt="thumbnail" 
+                    className="w-full h-full object-contain" 
+                    onError={(e) => { (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=150'; }}
+                  />
+                </button>
+              ))}
+            </div>
+          )}
+
+          {discountStr && (
+            <div className="absolute top-4 left-4 bg-[#318616] text-white font-black px-3 py-1 rounded-lg shadow-md text-sm z-10">
+              {discountStr} OFF
+            </div>
+          )}
         </div>
 
         {/* Product Info */}
@@ -197,8 +245,10 @@ export function ProductDetailsPage() {
           
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-red-600">₹{product.price}</span>
-              <span className="text-sm font-bold text-slate-400 line-through">₹{originalPrice}</span>
+              <span className="text-3xl font-black text-slate-900 dark:text-white">₹{product.price}</span>
+              {product.originalPrice && (
+                <span className="text-lg text-slate-400 line-through">₹{product.originalPrice}</span>
+              )}
             </div>
             <div className="flex flex-col items-end">
               <div className="flex items-center gap-1 bg-yellow-50 dark:bg-yellow-900/20 px-2 py-1 rounded-full border border-yellow-100 dark:border-yellow-900/50">
@@ -300,14 +350,27 @@ export function ProductDetailsPage() {
                       window.scrollTo(0,0);
                       navigate(`/product/${simProd.id}`);
                     }}
-                    className="min-w-[140px] border border-border rounded-xl overflow-hidden hover:shadow-md transition-all bg-white cursor-pointer snap-start flex-shrink-0"
+                    className="w-[140px] bg-white rounded-2xl overflow-hidden border border-slate-200/60 shadow-sm hover:shadow-md transition-all flex flex-col cursor-pointer snap-start shrink-0 h-full"
                   >
-                    <div className="aspect-square bg-slate-100">
-                      <img src={simProd.imageUrl} alt={simProd.title} className="w-full h-full object-cover mix-blend-multiply" />
+                    <div className="relative aspect-square p-2 bg-[#F4F6F9]">
+                      <img src={simProd.images && simProd.images.length > 0 ? simProd.images[0] : simProd.imageUrl} alt={simProd.title} className="w-full h-full object-contain mix-blend-multiply" />
                     </div>
-                    <div className="p-2">
-                      <p className="text-xs font-bold truncate">{simProd.title}</p>
-                      <p className="text-sm font-black text-red-600">₹{simProd.price}</p>
+                    <div className="p-2 flex flex-col flex-1 gap-1">
+                      <div className="flex items-center gap-1 bg-slate-100 w-max px-1.5 py-0.5 rounded-md mb-1">
+                        <span className="text-[7px] font-black text-slate-700 uppercase tracking-tight">8 MINS</span>
+                      </div>
+                      <h4 className="font-bold text-[10px] text-slate-800 line-clamp-2 leading-tight h-7 mb-1">
+                        {simProd.title}
+                      </h4>
+                      <p className="text-[9px] text-slate-500 font-semibold mb-1">1 Pack</p>
+                      <div className="flex items-center justify-between gap-1 mt-auto">
+                        <div className="flex flex-col">
+                          <span className="text-xs font-black text-slate-900 leading-none">₹{simProd.price}</span>
+                        </div>
+                        <button className="flex items-center justify-center px-2 h-6 bg-green-50 border border-[#318616] hover:bg-green-100 rounded text-[9px] font-black text-[#318616]">
+                          ADD
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}

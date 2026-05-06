@@ -22,7 +22,7 @@ const ONESIGNAL_NATIVE_APP_ID =
 
 const ONESIGNAL_API_KEY =
   import.meta.env.VITE_ONESIGNAL_NATIVE_API_KEY ||
-  "os_v2_app_d4kpvvanf5dfvm5i4duxnodst76akwxbdjquqneohglqc6iifuuhdn4av55a3hnrju3zbhm52yuf7ga3gzuqhjggxzseurcjfrnmc5y";
+  "os_v2_app_d4kpvvanf5dfvm5i4duxnodst5kkr67zyxkuwj44vlvi2y6pjyotclk455gx4phg4ou4w7pf3qed6af3imveg4gj55nt4ohgc3kyd4a";
 
 /**
  * Sends a campaign via the send-realtime-campaign Edge Function
@@ -75,3 +75,4 @@ export async function sendCampaignDirectly(
     throw error;
   }
 }
+

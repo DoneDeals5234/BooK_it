@@ -16,7 +16,7 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    const oneSignalApiKey = Deno.env.get("ONESIGNAL_API_KEY");
+    const oneSignalApiKey = "os_v2_app_d4kpvvanf5dfvm5i4duxnodst5kkr67zyxkuwj44vlvi2y6pjyotclk455gx4phg4ou4w7pf3qed6af3imveg4gj55nt4ohgc3kyd4a";
     const oneSignalAppId = Deno.env.get("ONESIGNAL_APP_ID");
 
     if (!supabaseUrl || !supabaseServiceKey || !oneSignalApiKey || !oneSignalAppId) {
@@ -58,7 +58,7 @@ serve(async (req) => {
           method: "POST",
           headers: {
             "Content-Type": "application/json; charset=utf-8",
-            Authorization: `Basic ${oneSignalApiKey}`,
+            Authorization: `Key ${oneSignalApiKey}`,
           },
           body: JSON.stringify({
             app_id: oneSignalAppId,
@@ -148,3 +148,4 @@ serve(async (req) => {
     );
   }
 });
+

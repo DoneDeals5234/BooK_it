@@ -215,13 +215,17 @@ export const OrderAmountModal = ({
     setError('');
 
     try {
+      const finalDescription = description 
+        ? `${description}\n\nPayment Method: Cash on Delivery` 
+        : `Payment Method: Cash on Delivery`;
+
       await createOrder(
         shopId,
         user.uid,
         user.displayName || profile?.name || 'Guest Customer',
         profile?.phone || 'Not provided',
         totalAmount,
-        description || undefined,
+        finalDescription,
         quantity,
         deliveryType === 'delivery' ? address : 'PICKUP FROM SHOP',
         locationLink || undefined,
@@ -414,6 +418,10 @@ export const OrderAmountModal = ({
                   </div>
                 </>
               )}
+              <div className="flex justify-between text-xs text-green-400 font-bold bg-green-500/10 p-2 rounded-lg">
+                <span>Payment Method</span>
+                <span>Cash on Delivery (COD)</span>
+              </div>
             </div>
             <div className="flex justify-between items-center">
               <div>
