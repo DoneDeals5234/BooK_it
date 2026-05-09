@@ -17,7 +17,7 @@ export const OtpVerificationModal = ({ isOpen, onClose, onConfirm, customerName 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (otp.length !== 4) return;
+    if (otp.length !== 6) return;
     
     setLoading(true);
     try {
@@ -38,9 +38,9 @@ export const OtpVerificationModal = ({ isOpen, onClose, onConfirm, customerName 
           <div className="mx-auto w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center mb-4">
             <ShieldCheck className="h-6 w-6 text-indigo-600" />
           </div>
-          <DialogTitle className="text-center font-black text-xl">Verify Delivery</DialogTitle>
+          <DialogTitle className="text-center font-black text-xl">Complete Order</DialogTitle>
           <DialogDescription className="text-center font-medium">
-            Please ask <strong>{customerName}</strong> for the 4-digit OTP shown in their app to confirm delivery.
+            Please ask <strong>{customerName}</strong> for the 6-digit Order ID shown in their app to complete the order.
           </DialogDescription>
         </DialogHeader>
         
@@ -50,11 +50,11 @@ export const OtpVerificationModal = ({ isOpen, onClose, onConfirm, customerName 
               type="text"
               inputMode="numeric"
               pattern="[0-9]*"
-              maxLength={4}
-              placeholder="0000"
+              maxLength={6}
+              placeholder="000000"
               value={otp}
               onChange={(e) => setOtp(e.target.value.replace(/[^0-9]/g, ''))}
-              className="text-center text-3xl font-black h-16 w-48 tracking-[0.5em] rounded-2xl border-2 focus:border-indigo-500 focus:ring-indigo-500"
+              className="text-center text-2xl font-black h-16 w-56 tracking-[0.3em] rounded-2xl border-2 focus:border-indigo-500 focus:ring-indigo-500"
               autoFocus
               required
             />
@@ -64,7 +64,7 @@ export const OtpVerificationModal = ({ isOpen, onClose, onConfirm, customerName 
             <Button 
               type="submit" 
               className="w-full h-12 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl shadow-lg shadow-indigo-100"
-              disabled={otp.length !== 4 || loading}
+              disabled={otp.length !== 6 || loading}
             >
               {loading ? (
                 <>
@@ -72,7 +72,7 @@ export const OtpVerificationModal = ({ isOpen, onClose, onConfirm, customerName 
                   VERIFYING...
                 </>
               ) : (
-                'CONFIRM DELIVERY'
+                'VERIFY & COMPLETE ORDER'
               )}
             </Button>
           </DialogFooter>

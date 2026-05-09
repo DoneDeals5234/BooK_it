@@ -24,8 +24,9 @@ export const CustomerOrdersPanel = ({ customerId }: CustomerOrdersPanelProps) =>
   const [paymentOrder, setPaymentOrder] = useState<{orderId: string, amount: number, upiId: string, shopName: string} | null>(null);
   const [shopsData, setShopsData] = useState<Record<string, Shop>>({});
 
-  const pickupOrders = orders.filter(o => o.delivery_type === 'pickup' || (!o.customer_address || o.customer_address === 'PICKUP FROM SHOP'));
-  const deliveryOrders = orders.filter(o => o.delivery_type === 'delivery' && o.customer_address && o.customer_address !== 'PICKUP FROM SHOP');
+  const pickupOrders = orders.filter(o => (o.delivery_type === 'pickup' || (!o.customer_address || o.customer_address === 'PICKUP FROM SHOP')) && !['delivered', 'collected'].includes(o.status));
+  const deliveryOrders = orders.filter(o => o.delivery_type === 'delivery' && o.customer_address && o.customer_address !== 'PICKUP FROM SHOP' && !['delivered', 'collected'].includes(o.status));
+  const completedOrders = orders.filter(o => ['delivered', 'collected'].includes(o.status));
 
   useEffect(() => {
     loadOrders();
@@ -145,12 +146,15 @@ export const CustomerOrdersPanel = ({ customerId }: CustomerOrdersPanelProps) =>
       </div>
 
       <Tabs defaultValue="pickup" value={activeOrderTab} onValueChange={setActiveOrderTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2 mb-6 p-1 bg-gray-100 dark:bg-gray-800 rounded-xl">
+        <TabsList className="grid w-full grid-cols-3 mb-6 p-1 bg-gray-100 dark:bg-gray-800 rounded-xl">
           <TabsTrigger value="pickup" className="rounded-lg font-black text-[10px] uppercase tracking-wider py-2 data-[state=active]:bg-white data-[state=active]:text-orange-600">
             Self Pick Up ({pickupOrders.length})
           </TabsTrigger>
           <TabsTrigger value="delivery" className="rounded-lg font-black text-[10px] uppercase tracking-wider py-2 data-[state=active]:bg-white data-[state=active]:text-blue-600">
             Home Delivery ({deliveryOrders.length})
+          </TabsTrigger>
+          <TabsTrigger value="completed" className="rounded-lg font-black text-[10px] uppercase tracking-wider py-2 data-[state=active]:bg-white data-[state=active]:text-green-600">
+            Completed ({completedOrders.length})
           </TabsTrigger>
         </TabsList>
 
@@ -189,6 +193,28 @@ export const CustomerOrdersPanel = ({ customerId }: CustomerOrdersPanelProps) =>
                   onCancel={() => handleCancelOrder(order.id)}
                   shop={shopsData[order.shop_id]}
                   onPay={() => handlePayAdvance(order, shopsData[order.shop_id])}
+                />
+              ))
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="completed">
+          <div className="grid gap-4">
+            {completedOrders.length === 0 ? (
+              <div className="text-center py-10 bg-gray-50 rounded-2xl border-2 border-dashed">
+                <CheckCircle className="h-10 w-10 text-gray-200 mx-auto mb-2" />
+                <p className="text-xs font-bold text-gray-400">No completed orders yet</p>
+              </div>
+            ) : (
+              completedOrders.map((order) => (
+                <OrderCard 
+                  key={order.id} 
+                  order={order} 
+                  onTrack={() => {}}
+                  onComplete={() => {}}
+                  onCancel={() => {}}
+                  shop={shopsData[order.shop_id]}
                 />
               ))
             )}
@@ -248,7 +274,7 @@ const OrderCard = ({ order, onTrack, onComplete, onCancel, onGoToShop, shop, onP
         {/* Header: Status & ID */}
         <div className={`px-4 py-2 flex items-center justify-between ${getStatusColor(order.status)}`}>
           <span className="text-[10px] font-black uppercase tracking-widest opacity-80">
-            ID: {order.id.slice(0, 8)}
+            ID: {order.order_code || '------'}
           </span>
           <span className="text-[10px] font-black uppercase tracking-widest flex items-center gap-1">
             {order.status === 'accepted' || order.status === 'ready_for_collection' ? (

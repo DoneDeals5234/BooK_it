@@ -20,7 +20,7 @@ export const getAllShopsFromSupabase = async (): Promise<Shop[]> => {
       .from('shops')
       .select(
         'id,name,location,owner_name,owner_email,owner_phone,about,' +
-        'shop_image_url,shop_interior_video_url,location_image_url,location_map_link,' +
+        'shop_image_url,shop_interior_video_url,location_image_url,' +
         'latitude,longitude,address,village,district,state,country,' +
         'password,barber_members,services,is_open,token_booking_paused,' +
         'opening_time,closing_time,category,category_id,created_at,' +
@@ -60,7 +60,6 @@ export const getAllShopsFromSupabase = async (): Promise<Shop[]> => {
         shopImageUrl: sanitizeSupabaseUrl(item.shop_image_url),
         shopInteriorVideoUrl: sanitizeSupabaseUrl(item.shop_interior_video_url),
         locationImageUrl: sanitizeSupabaseUrl(item.location_image_url),
-        locationMapLink: item.location_map_link,
         latitude: item.latitude || null,
         longitude: item.longitude || null,
         address: item.address || null,
@@ -129,7 +128,6 @@ export const getShopByIdFromSupabase = async (id: string): Promise<Shop | null> 
       shopImageUrl: sanitizeSupabaseUrl(data.shop_image_url),
       shopInteriorVideoUrl: sanitizeSupabaseUrl(data.shop_interior_video_url),
       locationImageUrl: sanitizeSupabaseUrl(data.location_image_url),
-      locationMapLink: data.location_map_link,
       latitude: data.latitude || null,
       longitude: data.longitude || null,
       address: data.address || null,
@@ -180,7 +178,6 @@ export const addShopToSupabase = async (
         shop_image_url: shop.shopImageUrl,
         shop_interior_video_url: shop.shopInteriorVideoUrl || null,
         location_image_url: shop.locationImageUrl,
-        location_map_link: shop.locationMapLink,
         latitude: shop.latitude || null,
         longitude: shop.longitude || null,
         address: shop.address || null,
@@ -191,8 +188,8 @@ export const addShopToSupabase = async (
         password: shop.password,
         barber_members: JSON.stringify(shop.barberMembers),
         services: JSON.stringify(shop.services),
-        is_open: true,
-        token_booking_paused: false,
+        is_open: false,
+        token_booking_paused: true,
         opening_time: shop.openingTime || '09:00',
         closing_time: shop.closingTime || '18:00',
         category: shop.category || 'salon',
@@ -220,7 +217,6 @@ export const addShopToSupabase = async (
       shopImageUrl: data.shop_image_url,
       shopInteriorVideoUrl: data.shop_interior_video_url,
       locationImageUrl: data.location_image_url,
-      locationMapLink: data.location_map_link,
       latitude: data.latitude || null,
       longitude: data.longitude || null,
       address: data.address || null,
@@ -268,7 +264,6 @@ export const updateShopInSupabase = async (
     if (updates.shopImageUrl !== undefined) updateData.shop_image_url = updates.shopImageUrl;
     if (updates.shopInteriorVideoUrl !== undefined) updateData.shop_interior_video_url = updates.shopInteriorVideoUrl;
     if (updates.locationImageUrl !== undefined) updateData.location_image_url = updates.locationImageUrl;
-    if (updates.locationMapLink !== undefined) updateData.location_map_link = updates.locationMapLink;
     if (updates.latitude !== undefined) updateData.latitude = updates.latitude;
     if (updates.longitude !== undefined) updateData.longitude = updates.longitude;
     if (updates.address !== undefined) updateData.address = updates.address;
@@ -292,6 +287,9 @@ export const updateShopInSupabase = async (
     if (updates.isTokenBookingEnabled !== undefined) updateData.token_booking_paused = !updates.isTokenBookingEnabled;
     if (updates.upiId !== undefined) updateData.upi_id = updates.upiId;
     if (updates.advancePaymentMode !== undefined) updateData.advance_payment_mode = updates.advancePaymentMode;
+    if (updates.instagramId !== undefined) updateData.instagram_id = updates.instagramId;
+    if (updates.facebookId !== undefined) updateData.facebook_id = updates.facebookId;
+    if (updates.interiorImages !== undefined) updateData.interior_images = updates.interiorImages;
 
     const { data, error } = await supabase
       .from('shops')
@@ -322,7 +320,6 @@ export const updateShopInSupabase = async (
       shopImageUrl: shop.shop_image_url,
       shopInteriorVideoUrl: shop.shop_interior_video_url,
       locationImageUrl: shop.location_image_url,
-      locationMapLink: shop.location_map_link,
       latitude: shop.latitude || null,
       longitude: shop.longitude || null,
       address: shop.address || null,

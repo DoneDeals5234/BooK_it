@@ -46,7 +46,7 @@ interface AuthContextType {
   signIn: (email: string, password: string, locationData?: LocationData) => Promise<void>;
   signUp: (email: string, password: string, locationData?: LocationData) => Promise<void>;
   signInAsShopOwner: (email: string, password: string, shopId: string, locationData?: LocationData) => Promise<void>;
-  signUpAsShopOwner: (email: string, password: string, shopName: string, shopCategory: string, locationData?: LocationData) => Promise<void>;
+  signUpAsShopOwner: (email: string, password: string, shopName: string, shopCategory: string, locationData?: LocationData, phone?: string, altPhone?: string, instagramId?: string, facebookId?: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -346,7 +346,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // First, save user profile with location data if provided
     try {
       console.log('💾 Saving user profile...');
-      await saveUserProfile(userId, '', '', undefined, locationData);
+      await saveUserProfile(userId, '', '', undefined, { ...locationData, email: userEmail });
       console.log('✅ User profile saved successfully');
     } catch (e: any) {
       console.error('⚠️ Failed to save user profile:', {
@@ -472,7 +472,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const signUpAsShopOwner = async (email: string, password: string, shopName: string, shopCategory: string, locationData?: LocationData) => {
+  const signUpAsShopOwner = async (email: string, password: string, shopName: string, shopCategory: string, locationData?: LocationData, phone?: string, altPhone?: string, instagramId?: string, facebookId?: string) => {
     try {
       let userId: string;
       let userEmail: string;
@@ -513,7 +513,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         location: locationData?.address || '',
         ownerName: userEmail.split('@')[0] || 'Shop Owner',
         ownerEmail: userEmail,
-        ownerPhone: '',
+        ownerPhone: phone || '',
+        alternativePhone: altPhone || '',
         about: '',
         shopImageUrl: '',
         locationImageUrl: '',
@@ -531,7 +532,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         openingTime: '09:00',
         closingTime: '18:00',
         category: shopCategory.toLowerCase(),
-      });
+        instagramId: instagramId || '',
+        facebookId: facebookId || '',
+      } as any);
 
       if (!newShop) {
         throw new Error('Failed to create shop. Please try again.');
@@ -558,7 +561,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // First, save user profile with location data if provided
       try {
         console.log('💾 Saving shop owner profile...');
-        await saveUserProfile(userId, '', '', undefined, locationData);
+        await saveUserProfile(userId, '', '', undefined, { ...locationData, email: userEmail });
         console.log('✅ Shop owner profile saved successfully');
       } catch (e) {
         console.error('⚠️ Failed to save shop owner profile:', e);

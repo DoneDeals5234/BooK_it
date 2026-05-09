@@ -74,13 +74,26 @@ export default function CartPage() {
     const loadCart = async () => {
       setLoading(true);
       try {
-        const { data, error } = await supabase
-          .from('cart_items')
-          .select('*, product:featured_products(*)')
-          .eq('user_id', user.uid);
-
-        if (error) throw error;
-        setItems(data || []);
+        const { getCartItems } = await import('@/lib/supabase-marketplace');
+        const cartData = await getCartItems(user.uid);
+        
+        // Map lib interface to component interface
+        const formattedItems = cartData.map(item => ({
+          id: item.id,
+          user_id: item.userId,
+          product_id: item.productId,
+          quantity: item.quantity,
+          product: {
+            id: item.product?.id || '',
+            title: item.product?.title || 'Unknown Product',
+            price: item.product?.price || 0,
+            image_url: item.product?.imageUrl || '',
+            original_price: item.product?.originalPrice,
+            shop_id: item.product?.shopId
+          }
+        })) as CartItem[];
+        
+        setItems(formattedItems);
       } catch (error) {
         console.error('Error loading cart:', error);
         toast.error('Failed to load cart items');

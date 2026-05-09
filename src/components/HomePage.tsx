@@ -789,6 +789,11 @@ export default function HomePage({ onShowLogin }: HomePageProps) {
                             <h3 className="font-semibold text-base text-gray-900 dark:text-white truncate">
                               {profile.name}
                             </h3>
+                            {profile.email && (
+                              <p className="text-[10px] text-red-500 font-bold truncate">
+                                {profile.email}
+                              </p>
+                            )}
                             <p className="text-sm text-gray-600 dark:text-gray-400 truncate">
                               {profile.phone}
                             </p>

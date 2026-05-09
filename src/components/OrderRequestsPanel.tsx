@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2, Phone, IndianRupee, AlertCircle, CheckCircle, XCircle, Package, MapPin, Navigation, ExternalLink, User, Truck, Clock, Printer, Download, ImageIcon, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { notifySuccess } from '@/lib/notification-helper';
-import { getPendingOrdersForShop, getAllOrdersForShop, acceptOrder, rejectOrder, markOrderReady, markOrderOutForDelivery, markOrderDeliveredByOwner, markOrderDeliveredWithOtp, updateDeliveryChoice, updateOrderPaymentStatus, getStatusColor, getStatusDisplayName, formatOrderDate, type Order } from '@/lib/supabase-orders';
+import { getPendingOrdersForShop, getAllOrdersForShop, acceptOrder, rejectOrder, markOrderReady, markOrderOutForDelivery, markOrderDeliveredByOwner, verifyAndCompleteOrder, updateDeliveryChoice, updateOrderPaymentStatus, getStatusColor, getStatusDisplayName, formatOrderDate, type Order } from '@/lib/supabase-orders';
 import { getPrintingOrderForMainOrder, getBatchPrintingOrdersForOrders, type PrintingOrder } from '@/lib/supabase-printing';
 import { RejectOrderModal } from './RejectOrderModal';
 import { OtpVerificationModal } from './OtpVerificationModal';
@@ -162,13 +162,13 @@ export const OrderRequestsPanel = ({ shopId }: OrderRequestsPanelProps) => {
   const handleOtpConfirm = async (otp: string) => {
     if (!verifyingOrderId) return;
     try {
-      await markOrderDeliveredWithOtp(verifyingOrderId, otp);
-      notifySuccess('Order delivered successfully! 🎉', 'Order Complete');
+      await verifyAndCompleteOrder(verifyingOrderId, otp);
+      notifySuccess('Order completed successfully! 🎉', 'Order Complete');
       setShowOtpModal(false);
       setVerifyingOrderId(null);
       loadOrders();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'OTP Verification failed');
+      toast.error(error instanceof Error ? error.message : 'Verification failed');
       throw error;
     }
   };
@@ -206,6 +206,10 @@ export const OrderRequestsPanel = ({ shopId }: OrderRequestsPanelProps) => {
       // Show orders where owner explicitly chose book_it
       return orders.filter(o => o.delivery_choice === 'book_it');
     }
+    if (activeTab === 'completed') {
+      // Show all completed/delivered orders across all types
+      return orders.filter(o => o.status === 'collected' || o.status === 'delivered');
+    }
     return orders;
   };
 
@@ -229,10 +233,11 @@ export const OrderRequestsPanel = ({ shopId }: OrderRequestsPanelProps) => {
   return (
     <div className="space-y-4 max-w-4xl mx-auto w-full">
       <Tabs defaultValue="pickup-orders" value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3 mb-4">
+        <TabsList className="grid w-full grid-cols-4 mb-4">
           <TabsTrigger value="pickup-orders" className="text-xs font-bold">Shop Pick up</TabsTrigger>
           <TabsTrigger value="self-delivery" className="text-xs font-bold">Self Delivery</TabsTrigger>
           <TabsTrigger value="book-it" className="text-xs font-bold">Book It Delivery</TabsTrigger>
+          <TabsTrigger value="completed" className="text-xs font-bold">Completed</TabsTrigger>
         </TabsList>
 
         <TabsContent value={activeTab} className="space-y-4">
@@ -355,7 +360,12 @@ const OrderCard = ({ order, actionLoading, handleAccept, handleRejectClick, hand
         {/* Header */}
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
-            <h3 className="font-bold text-gray-900 truncate">{order.customer_name}</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="font-bold text-gray-900 truncate">{order.customer_name}</h3>
+              <span className="text-[10px] font-black bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md">
+                ID: {order.order_code || '------'}
+              </span>
+            </div>
             <p className="text-[10px] text-muted-foreground">{formatOrderDate(order.created_at)}</p>
           </div>
           <div className="flex flex-col items-end gap-1">
@@ -513,11 +523,15 @@ const OrderCard = ({ order, actionLoading, handleAccept, handleRejectClick, hand
             </div>
           )}
 
-          {order.status === 'ready_for_collection' && (
-            <div className="p-3 bg-green-50 border border-green-200 rounded-xl flex items-center gap-2">
-              <CheckCircle className="h-4 w-4 text-green-600" />
-              <p className="text-xs font-bold text-green-800">Ready for Collection</p>
-            </div>
+          {(order.status === 'ready_for_collection' || order.status === 'ready_for_delivery') && (
+            <Button 
+              className="w-full bg-green-600 h-10 font-bold rounded-xl" 
+              onClick={() => handleMarkDelivered?.(order.id)} 
+              disabled={actionLoading === order.id}
+            >
+              {actionLoading === order.id ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle className="h-4 w-4 mr-2" />}
+              Complete Order
+            </Button>
           )}
 
           {order.status === 'out_for_delivery' && (
@@ -527,7 +541,7 @@ const OrderCard = ({ order, actionLoading, handleAccept, handleRejectClick, hand
               disabled={actionLoading === order.id}
             >
               {actionLoading === order.id ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle className="h-4 w-4 mr-2" />}
-              Mark Delivered
+              Complete Order
             </Button>
           )}
 

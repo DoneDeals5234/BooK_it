@@ -9,7 +9,7 @@ const { createClient } = require('@supabase/supabase-js');
 admin.initializeApp();
 const db = admin.firestore();
 
-const ONESIGNAL_APP_ID = '1f14fad4-0d2f-465a-b3a8-e0e976b8729f';
+const ONESIGNAL_APP_ID = '71048c28-503e-49e5-89b1-0de00ccdca4b';
 const ONESIGNAL_API_KEY = 'os_v2_app_d4kpvvanf5dfvm5i4duxnodst5glczst2rmebymf4qvuwtvteamesdo3btuipvl5bgc53qwuyoge23d5hwst2xxyhry4t2kiyk4driq';
 const ONESIGNAL_API_URL = 'https://onesignal.com/api/v1/notifications';
 

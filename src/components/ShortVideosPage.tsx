@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Heart, MessageSquare, X, Search, Eye, Upload } from 'lucide-react';
+import { Heart, MessageSquare, X, Search, Eye, Upload, MapPin } from 'lucide-react';
 import { getVideos, likeVideo, unlikeVideo, searchVideosByProfile } from '@/lib/videos-storage';
 import type { Video } from '@/lib/videos-storage';
 import { useAuth } from '@/contexts/AuthContext';
@@ -8,36 +8,21 @@ import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase';
 import { PublicProfileView } from '@/components/PublicProfileView';
 import { getUserProfile } from '@/lib/supabase-user-profiles';
+import { getShopById } from '@/lib/shops-storage';
+import toast from 'react-hot-toast';
 import { CommentModal } from '@/components/CommentModal';
 import { getCommentCount } from '@/lib/supabase-comments';
 import { shareToInstagram, shareToWhatsApp } from '@/lib/video-share';
-import { VideoUploadModal } from '@/components/VideoUploadModal';
 import './ShortVideosPage.css';
 
 // WhatsApp Icon
 const WhatsAppIcon = () => (
-  <svg className="h-6 w-6" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.67-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.076 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421-7.403h-.004a9.87 9.87 0 00-4.935 1.188L5.031 3.04 6.251 8.735a9.857 9.857 0 001.435 4.873 9.832 9.832 0 004.293 3.563l4.303-.215a9.82 9.82 0 004.85-1.43l2.47 1.427-1.341-4.281a9.86 9.86 0 00.744-4.916 9.86 9.86 0 00-9.06-8.847z"/>
-  </svg>
+  <img src="/whatsapp.png" alt="WhatsApp" className="h-8 w-8 object-contain drop-shadow-md" />
 );
 
 // Instagram Icon
 const InstagramIcon = () => (
-  <svg className="h-6 w-6" viewBox="0 0 24 24" fill="currentColor">
-    <rect x="2" y="2" width="20" height="20" rx="5" ry="5" fill="url(#instagramGradient)"/>
-    <defs>
-      <linearGradient id="instagramGradient" x1="0%" y1="100%" x2="100%" y2="0%">
-        <stop offset="0%" style={{stopColor: '#feda75', stopOpacity: 1}} />
-        <stop offset="5%" style={{stopColor: '#fa7e1e', stopOpacity: 1}} />
-        <stop offset="45%" style={{stopColor: '#d92e7f', stopOpacity: 1}} />
-        <stop offset="60%" style={{stopColor: '#9b36b7', stopOpacity: 1}} />
-        <stop offset="90%" style={{stopColor: '#515bd4', stopOpacity: 1}} />
-      </linearGradient>
-    </defs>
-    <circle cx="12" cy="12" r="3.5" fill="white"/>
-    <circle cx="17.5" cy="6.5" r="1.5" fill="white"/>
-    <circle cx="12" cy="12" r="8.5" fill="none" stroke="white" strokeWidth="1.5"/>
-  </svg>
+  <img src="/instagram.png" alt="Instagram" className="h-8 w-8 object-contain drop-shadow-md" />
 );
 
 interface ShortVideosPageProps {
@@ -59,6 +44,8 @@ export default function ShortVideosPage({ onClose }: ShortVideosPageProps) {
   const [showCommentModal, setShowCommentModal] = useState(false);
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
   const [isVideoPlaying, setIsVideoPlaying] = useState(true);
+  const [showHeartAnimation, setShowHeartAnimation] = useState(false);
+  const lastTapRef = useRef<number>(0);
   const [isVideoLoading, setIsVideoLoading] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const videoContainerRef = useRef<HTMLDivElement>(null);
@@ -203,7 +190,6 @@ export default function ShortVideosPage({ onClose }: ShortVideosPageProps) {
     if (videos.length === 0) return;
 
     const preloadNextVideos = () => {
-      // Preload next 3 videos
       for (let i = 1; i <= 3 && i < videos.length; i++) {
         const preloadIndex = (currentVideoIndex + i) % videos.length;
         const videoToPreload = videos[preloadIndex];
@@ -216,7 +202,8 @@ export default function ShortVideosPage({ onClose }: ShortVideosPageProps) {
         const video = document.createElement('video');
         video.preload = 'auto';
         video.crossOrigin = 'anonymous';
-        video.src = videoToPreload.videoUrl;
+        // Fetch only first 3 seconds
+        video.src = videoToPreload.videoUrl + '#t=0,3';
         video.style.display = 'none';
         document.body.appendChild(video);
 
@@ -240,7 +227,29 @@ export default function ShortVideosPage({ onClose }: ShortVideosPageProps) {
     };
 
     preloadNextVideos();
-  }, [currentVideoIndex, videos]);
+  }, [videos, currentVideoIndex, isVideoPlaying]);
+
+  const handleLocationClick = async (shopId: string) => {
+    if (!window.confirm('App wants to open Google Maps')) return;
+    
+    try {
+      toast.loading('Fetching location...', { id: 'locationFetch' });
+      const shop = await getShopById(shopId);
+      toast.dismiss('locationFetch');
+      
+      if (shop && shop.locationMapLink) {
+        window.open(shop.locationMapLink, '_blank');
+      } else if (shop && shop.latitude && shop.longitude) {
+        const mapUrl = `https://www.google.com/maps/search/?api=1&query=${shop.latitude},${shop.longitude}`;
+        window.open(mapUrl, '_blank');
+      } else {
+        toast.error('Location not available for this shop.');
+      }
+    } catch (error) {
+      toast.dismiss('locationFetch');
+      toast.error('Failed to get location');
+    }
+  };
 
   // Handle search
   const handleSearch = async (query: string) => {
@@ -349,21 +358,23 @@ export default function ShortVideosPage({ onClose }: ShortVideosPageProps) {
     if (!currentUser?.uid) return;
 
     const isLiked = likedVideos.has(video.id);
+    
+    // Optimistic UI Update for instant feedback
     if (isLiked) {
-      await unlikeVideo(video.id, currentUser.uid);
       setLikedVideos((prev) => {
         const newSet = new Set(prev);
         newSet.delete(video.id);
         return newSet;
       });
+      setVideos(prev => prev.map(v => v.id === video.id ? { ...v, likes: Math.max(0, v.likes - 1) } : v));
+      // Do actual DB update in background
+      unlikeVideo(video.id, currentUser.uid).catch(console.error);
     } else {
-      await likeVideo(video.id, currentUser.uid);
       setLikedVideos((prev) => new Set(prev).add(video.id));
+      setVideos(prev => prev.map(v => v.id === video.id ? { ...v, likes: v.likes + 1 } : v));
+      // Do actual DB update in background
+      likeVideo(video.id, currentUser.uid).catch(console.error);
     }
-
-    // Refresh videos to get updated like count
-    const updated = await getVideos();
-    setVideos(updated);
   };
 
   // Share to WhatsApp
@@ -412,28 +423,51 @@ export default function ShortVideosPage({ onClose }: ShortVideosPageProps) {
         <div className="text-center">
           <p className="text-white text-lg mb-4">No videos yet</p>
           <Button
-            onClick={() => setShowUploadModal(true)}
+            onClick={() => navigate('/upload-video?source=videos')}
             className="bg-primary hover:bg-primary/90"
           >
             <Upload className="h-4 w-4 mr-2" />
             Upload First Video
           </Button>
         </div>
-        {showUploadModal && (
-          <VideoUploadModal
-            onClose={() => setShowUploadModal(false)}
-            onVideoUploaded={() => {
-              setShowUploadModal(false);
-              // Reload videos
-              getVideos().then(setVideos);
-            }}
-          />
-        )}
       </div>
     );
   }
 
   const currentVideo = videos[currentVideoIndex];
+
+  const handleVideoTap = (e: React.MouseEvent) => {
+    const now = Date.now();
+    const DOUBLE_TAP_DELAY = 300;
+    
+    if (now - lastTapRef.current < DOUBLE_TAP_DELAY) {
+      // Double tap detected
+      const currentVideo = videos[currentVideoIndex];
+      if (!likedVideos.has(currentVideo.id)) {
+        handleLike(currentVideo);
+      }
+      setShowHeartAnimation(true);
+      setTimeout(() => setShowHeartAnimation(false), 1000);
+      lastTapRef.current = 0; // reset
+    } else {
+      // Single tap logic inside a timeout to allow double tap
+      lastTapRef.current = now;
+      setTimeout(() => {
+        if (lastTapRef.current === now) {
+          // It was a single tap
+          if (videoElementRef.current) {
+            if (videoElementRef.current.paused) {
+              videoElementRef.current.play();
+              setIsVideoPlaying(true);
+            } else {
+              videoElementRef.current.pause();
+              setIsVideoPlaying(false);
+            }
+          }
+        }
+      }, DOUBLE_TAP_DELAY);
+    }
+  };
 
   return (
     <div
@@ -527,18 +561,7 @@ export default function ShortVideosPage({ onClose }: ShortVideosPageProps) {
               controls={false}
               crossOrigin="anonymous"
               preload="auto"
-              onClick={() => {
-                // Single tap to toggle play/pause
-                if (videoElementRef.current) {
-                  if (videoElementRef.current.paused) {
-                    videoElementRef.current.play();
-                    setIsVideoPlaying(true);
-                  } else {
-                    videoElementRef.current.pause();
-                    setIsVideoPlaying(false);
-                  }
-                }
-              }}
+              onClick={handleVideoTap}
               onError={(e) => {
                 console.error('❌ Video playback error:', {
                   src: currentVideo.videoUrl,
@@ -569,29 +592,39 @@ export default function ShortVideosPage({ onClose }: ShortVideosPageProps) {
             </div>
           )}
 
+          {/* Heart Animation Overlay */}
+          {showHeartAnimation && (
+            <div className="absolute inset-0 flex items-center justify-center z-40 pointer-events-none">
+              <Heart className="h-40 w-40 text-red-500 animate-pulse fill-current drop-shadow-2xl opacity-80" />
+            </div>
+          )}
+
           {/* Video Info Overlay */}
           <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black via-transparent to-transparent p-3 sm:p-4 z-20">
             <div className="flex items-end justify-between">
               {/* Left: Uploader Info */}
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-2">
+                <div 
+                  className="flex items-center gap-2 mb-2 cursor-pointer transition-transform hover:scale-105 active:scale-95"
+                  onClick={() => navigate(`/profile/${currentVideo.uploaderId}`)}
+                >
                   {/* Profile Avatar */}
                   {profileImages[currentVideo.uploaderId] ? (
                     <img
                       src={profileImages[currentVideo.uploaderId]!}
                       alt={currentVideo.uploaderName}
-                      className="h-8 w-8 md:h-10 md:w-10 rounded-full object-cover border-2 border-white/30 flex-shrink-0"
+                      className="h-8 w-8 md:h-10 md:w-10 rounded-full object-cover border-2 border-white/30 flex-shrink-0 shadow-lg"
                     />
                   ) : (
-                    <div className="h-8 w-8 md:h-10 md:w-10 rounded-full flex items-center justify-center text-xs md:text-sm font-semibold text-white bg-gray-600 flex-shrink-0">
+                    <div className="h-8 w-8 md:h-10 md:w-10 rounded-full flex items-center justify-center text-xs md:text-sm font-semibold text-white bg-gradient-to-tr from-slate-600 to-slate-800 flex-shrink-0 shadow-lg border-2 border-white/30">
                       {currentVideo.uploaderName?.[0]?.toUpperCase() || '?'}
                     </div>
                   )}
 
-                  <div className="flex-1 min-w-0">
-                    <p className="text-white font-semibold text-sm md:text-base truncate">{currentVideo.uploaderName}</p>
+                  <div className="flex-1 min-w-0 drop-shadow-md">
+                    <p className="text-white font-bold text-sm md:text-base truncate drop-shadow-lg">{currentVideo.uploaderName}</p>
                     {currentVideo.caption && (
-                      <p className="text-white/80 text-xs md:text-sm mt-0.5 line-clamp-2">{currentVideo.caption}</p>
+                      <p className="text-white/90 text-xs md:text-sm mt-0.5 line-clamp-2 drop-shadow-md font-medium">{currentVideo.caption}</p>
                     )}
                   </div>
                 </div>
@@ -623,22 +656,54 @@ export default function ShortVideosPage({ onClose }: ShortVideosPageProps) {
                   <span className="text-xs font-bold">{commentCounts[currentVideo.id] || 0}</span>
                 </button>
 
+                {/* Location Icon for Shop Owners */}
+                {currentVideo.uploaderType === 'shop' && (
+                  <button
+                    onClick={() => handleLocationClick(currentVideo.uploaderId)}
+                    className="flex flex-col items-center justify-center text-red-500 active:opacity-80 hover:opacity-80 transition-opacity p-3 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-sm"
+                    title="Shop Location"
+                  >
+                    <MapPin className="h-6 w-6 sm:h-7 sm:w-7" />
+                  </button>
+                )}
+
                 {/* Share to WhatsApp */}
                 <button
-                  onClick={() => handleShareWhatsApp(currentVideo)}
+                  onClick={() => {
+                    if (window.confirm('App wants to open WhatsApp')) {
+                      handleShareWhatsApp(currentVideo);
+                    }
+                  }}
                   className="flex flex-col items-center justify-center text-[#25D366] active:opacity-80 hover:opacity-80 transition-opacity p-3 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-sm"
                   title="Share on WhatsApp"
                 >
-                  <WhatsAppIcon />
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6 sm:w-7 sm:h-7">
+                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413z" />
+                  </svg>
                 </button>
 
                 {/* Share to Instagram */}
                 <button
-                  onClick={() => handleShareInstagram(currentVideo)}
-                  className="flex flex-col items-center justify-center active:opacity-80 hover:opacity-80 transition-opacity p-3 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-sm"
+                  onClick={() => {
+                    if (window.confirm('App wants to open Instagram')) {
+                      handleShareInstagram(currentVideo);
+                    }
+                  }}
+                  className="flex flex-col items-center justify-center text-white active:opacity-80 hover:opacity-80 transition-opacity p-3 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-sm"
                   title="Share on Instagram"
                 >
-                  <InstagramIcon />
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6 sm:w-7 sm:h-7" style={{ fill: 'url(#ig-gradient)' }}>
+                    <defs>
+                      <linearGradient id="ig-gradient" x1="0%" y1="100%" x2="100%" y2="0%">
+                        <stop offset="0%" stopColor="#f09433" />
+                        <stop offset="25%" stopColor="#e6683c" />
+                        <stop offset="50%" stopColor="#dc2743" />
+                        <stop offset="75%" stopColor="#cc2366" />
+                        <stop offset="100%" stopColor="#bc1888" />
+                      </linearGradient>
+                    </defs>
+                    <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm3.98-10.98a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z" />
+                  </svg>
                 </button>
               </div>
             </div>
@@ -660,6 +725,12 @@ export default function ShortVideosPage({ onClose }: ShortVideosPageProps) {
         <CommentModal
           videoId={currentVideo.id}
           onClose={() => setShowCommentModal(false)}
+          onCommentAdded={() => {
+            setCommentCounts((prev) => ({
+              ...prev,
+              [currentVideo.id]: (prev[currentVideo.id] || 0) + 1,
+            }));
+          }}
         />
       )}
     </div>

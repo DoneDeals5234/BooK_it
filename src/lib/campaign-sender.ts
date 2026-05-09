@@ -18,11 +18,11 @@ interface Campaign {
 
 const ONESIGNAL_NATIVE_APP_ID =
   import.meta.env.VITE_ONESIGNAL_NATIVE_APP_ID ||
-  "1f14fad4-0d2f-465a-b3a8-e0e976b8729f";
+  "71048c28-503e-49e5-89b1-0de00ccdca4b";
 
 const ONESIGNAL_API_KEY =
   import.meta.env.VITE_ONESIGNAL_NATIVE_API_KEY ||
-  "os_v2_app_d4kpvvanf5dfvm5i4duxnodst5kkr67zyxkuwj44vlvi2y6pjyotclk455gx4phg4ou4w7pf3qed6af3imveg4gj55nt4ohgc3kyd4a";
+  "os_v2_app_oeciykcqhze6lcnrbxqaztokjnzez2oi76me4sv3y3p6gy5eu4kvf5qxzpuuraw25tybywnd3vg443ug2ln3os34jkyqd42llsnfjty";
 
 /**
  * Sends a campaign via the send-realtime-campaign Edge Function

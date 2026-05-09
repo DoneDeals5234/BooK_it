@@ -16,7 +16,7 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    const oneSignalApiKey = "os_v2_app_d4kpvvanf5dfvm5i4duxnodst5kkr67zyxkuwj44vlvi2y6pjyotclk455gx4phg4ou4w7pf3qed6af3imveg4gj55nt4ohgc3kyd4a";
+    const oneSignalApiKey = "os_v2_app_oeciykcqhze6lcnrbxqaztokjnzez2oi76me4sv3y3p6gy5eu4kvf5qxzpuuraw25tybywnd3vg443ug2ln3os34jkyqd42llsnfjty";
     const oneSignalAppId = Deno.env.get("ONESIGNAL_APP_ID");
 
     if (!supabaseUrl || !supabaseServiceKey || !oneSignalApiKey || !oneSignalAppId) {

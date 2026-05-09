@@ -103,7 +103,7 @@ export async function initializeCapacitorOneSignal(): Promise<void> {
 
     // Modern v5 SDK Initialization
     console.log('🔔 Initializing OneSignal v5 SDK...');
-    const oneSignalAppId = '1f14fad4-0d2f-465a-b3a8-e0e976b8729f';
+    const oneSignalAppId = '71048c28-503e-49e5-89b1-0de00ccdca4b';
 
     // In OneSignal v5 (SDK 5.0+), we use OneSignal.initialize()
     let oneSignalInstance = window.OneSignal;

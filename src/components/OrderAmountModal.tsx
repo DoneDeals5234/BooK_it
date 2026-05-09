@@ -98,9 +98,9 @@ export const OrderAmountModal = ({
       console.log('Calculated cost:', cost);
       setDeliveryCost(cost);
     } else {
-      console.log('Missing conditions — shopLat:', shopLat, 'shopLng:', shopLng, 'customerCoords:', customerCoords, 'deliveryType:', deliveryType);
       setDistance(null);
-      setDeliveryCost(0);
+      // Ensure minimum ₹30 delivery fee for home delivery, even if GPS fails
+      setDeliveryCost(deliveryType === 'delivery' ? 30 : 0);
     }
   }, [deliveryType, customerCoords, shopLat, shopLng, shopMapLink]);
 

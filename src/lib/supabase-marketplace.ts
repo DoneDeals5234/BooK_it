@@ -57,6 +57,8 @@ export const getAllActiveProducts = async (): Promise<FeaturedProduct[]> => {
     description: item.description,
     isActive: item.is_active,
     displayOrder: item.display_order,
+    stock: item.stock || item.inventory,
+    maxPerCustomer: item.max_per_customer,
     createdAt: new Date(item.created_at),
     updatedAt: new Date(item.updated_at),
   }));
@@ -82,7 +84,7 @@ export const getProductsPhase2 = async (ids: string[]) => {
   if (!ids || ids.length === 0) return [];
   const { data, error } = await supabase
     .from('featured_products')
-    .select('id, price, original_price, discount_percentage')
+    .select('id, price, original_price, discount_percentage, inventory, max_per_customer')
     .in('id', ids);
     
   if (error) {
@@ -131,6 +133,8 @@ export const getProductById = async (productId: string): Promise<FeaturedProduct
     description: data.description,
     isActive: data.is_active,
     displayOrder: data.display_order,
+    stock: data.stock || data.inventory,
+    maxPerCustomer: data.max_per_customer,
     createdAt: new Date(data.created_at),
     updatedAt: new Date(data.updated_at),
   };
@@ -161,6 +165,8 @@ export const getSimilarProducts = async (shopId: string, currentProductId: strin
     description: item.description,
     isActive: item.is_active,
     displayOrder: item.display_order,
+    stock: item.stock || item.inventory,
+    maxPerCustomer: item.max_per_customer,
     createdAt: new Date(item.created_at),
     updatedAt: new Date(item.updated_at),
   }));
@@ -234,13 +240,25 @@ export const updateCartQuantity = async (userId: string, productId: string, quan
     return !error;
   }
 
-  const { error } = await supabase
+  const { data: existing } = await supabase
     .from('cart_items')
-    .update({ quantity })
+    .select('id')
     .eq('user_id', userId)
-    .eq('product_id', productId);
+    .eq('product_id', productId)
+    .single();
 
-  return !error;
+  if (existing) {
+    const { error } = await supabase
+      .from('cart_items')
+      .update({ quantity })
+      .eq('id', existing.id);
+    return !error;
+  } else {
+    const { error } = await supabase
+      .from('cart_items')
+      .insert({ user_id: userId, product_id: productId, quantity });
+    return !error;
+  }
 };
 
 // Orders

@@ -27,6 +27,7 @@ export const getFeaturedProductsByShopId = async (shopId: string): Promise<Featu
     description: item.description,
     isActive: item.is_active,
     displayOrder: item.display_order,
+    inventory: item.inventory,
     createdAt: new Date(item.created_at),
     updatedAt: new Date(item.updated_at),
   }));
@@ -57,6 +58,7 @@ export const getFeaturedProductById = async (productId: string): Promise<Feature
     description: data.description,
     isActive: data.is_active,
     displayOrder: data.display_order,
+    inventory: data.inventory,
     createdAt: new Date(data.created_at),
     updatedAt: new Date(data.updated_at),
   };
@@ -121,6 +123,7 @@ export const addFeaturedProduct = async (
     description: data.description,
     isActive: data.is_active,
     displayOrder: data.display_order,
+    inventory: data.inventory,
     createdAt: new Date(data.created_at),
     updatedAt: new Date(data.updated_at),
   };
@@ -167,6 +170,7 @@ export const updateFeaturedProduct = async (
     description: data.description,
     isActive: data.is_active,
     displayOrder: data.display_order,
+    inventory: data.inventory,
     createdAt: new Date(data.created_at),
     updatedAt: new Date(data.updated_at),
   };

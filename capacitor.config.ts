@@ -6,7 +6,7 @@ const config: CapacitorConfig = {
   webDir: 'dist',
   plugins: {
     OneSignal: {
-      appId: 'f2c5559b-9e99-4aa0-8924-237469824a88',
+      appId: '71048c28-503e-49e5-89b1-0de00ccdca4b',
       googleProjectNumber: '1091592092089',
     },
     AlarmScheduler: {

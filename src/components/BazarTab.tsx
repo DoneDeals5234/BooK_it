@@ -395,11 +395,12 @@ export default function BazarTab({ onShowLogin }: BazarTabProps) {
                             className="bg-white rounded-2xl overflow-hidden border border-slate-200/60 shadow-sm hover:shadow-md transition-all group flex flex-col cursor-pointer h-full"
                             onClick={() => navigate(`/product/${product.id}`)}
                           >
-                            <div className="relative aspect-square p-4 bg-[#F4F6F9]">
+                            <div className="relative aspect-square bg-[#F4F6F9] overflow-hidden">
                               <img
                                 src={product.imageUrl}
                                 alt={product.title}
-                                className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-500 mix-blend-multiply"
+                                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                                style={{ imageRendering: '-webkit-optimize-contrast' }}
                                 onError={(e) => { (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1506484381205-f7945653044d?w=400'; }}
                               />
                               {discount > 0 && (

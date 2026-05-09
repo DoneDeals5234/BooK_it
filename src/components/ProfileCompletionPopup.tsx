@@ -14,17 +14,21 @@ export const ProfileCompletionPopup = ({
   onNavigateToProfile,
 }: ProfileCompletionPopupProps) => {
   const { user } = useAuth();
-  const { profile, profileComplete } = useUserProfile();
+  const { profile, profileComplete, loading } = useUserProfile();
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    // Show popup after login if profile is not complete
-    if (user && profile !== undefined && !profileComplete) {
-      setOpen(true);
+    // Show popup after login if profile is not complete AND not loading
+    if (!loading && user && !profileComplete) {
+      // Small delay to ensure smooth transition
+      const timer = setTimeout(() => {
+        setOpen(true);
+      }, 1000);
+      return () => clearTimeout(timer);
     } else {
       setOpen(false);
     }
-  }, [user, profile, profileComplete]);
+  }, [user, profileComplete, loading]);
 
   const handleClose = () => {
     setOpen(false);

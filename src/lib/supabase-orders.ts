@@ -182,6 +182,7 @@ export interface Order {
   collected_at?: string;
   expires_at: string;
   otp_code?: string;
+  order_code?: string;
   is_cancelled?: boolean;
   cancelled_at?: string;
   payment_screenshot_url?: string;
@@ -294,18 +295,22 @@ export async function createOrder(
     // 🔔 Notify shop owner about the new order
     // This triggers the Android Foreground Service / Alarm logic
     try {
-      notifyShopOwnerNewOrder(data);
+      console.log('⏳ Triggering shop owner notification...');
+      await notifyShopOwnerNewOrder(data);
+      console.log('✅ Shop owner notification process completed.');
     } catch (notifyError) {
       console.warn('⚠️ Failed to trigger shop owner notification:', notifyError);
     }
 
     // 🔔 Notify customer that order is booked
     try {
+      console.log('⏳ Triggering customer notification...');
       await sendOrderNotificationToUser(
         data.customer_id,
         'Order Booked! 🛍️',
         `Your order for ₹${data.order_amount} from ${data.shop_name || 'the shop'} has been successfully booked.`
       );
+      console.log('✅ Customer notification process completed.');
     } catch (notifyError) {
       console.warn('⚠️ Failed to notify customer:', notifyError);
     }
@@ -325,7 +330,7 @@ export async function createOrder(
 export async function getPendingOrdersForShop(shopId: string): Promise<Order[]> {
   const { data, error } = await supabase
     .from('orders')
-    .select('*')
+    .select('id,shop_id,customer_id,customer_name,customer_phone,order_amount,delivery_cost,total_amount,order_description,product_name,product_image,unit_price,quantity,status,delivery_type,delivery_choice,customer_address,location_link,customer_lat,customer_lng,shop_lat,shop_lng,shop_name,created_at,updated_at,accepted_at,rejected_at,ready_at,collected_at,expires_at,rejection_reason,rejection_notes,is_cancelled,cancelled_at,fulfillment_status,book_it_status,payment_screenshot_url,payment_status')
     .eq('shop_id', shopId)
     .eq('status', 'pending')
     .gt('expires_at', new Date().toISOString())
@@ -347,7 +352,7 @@ export async function getAllOrdersForShop(shopId: string): Promise<Order[]> {
       'order_description,product_name,product_image,unit_price,quantity,status,delivery_type,' +
       'delivery_choice,customer_address,location_link,customer_lat,customer_lng,shop_lat,shop_lng,' +
       'shop_name,created_at,updated_at,accepted_at,rejected_at,ready_at,collected_at,expires_at,' +
-      'rejection_reason,rejection_notes,otp_code,is_cancelled,cancelled_at,fulfillment_status,' +
+      'rejection_reason,rejection_notes,is_cancelled,cancelled_at,fulfillment_status,' +
       'book_it_status,payment_screenshot_url,payment_status'
     )
     .eq('shop_id', shopId)
@@ -370,7 +375,7 @@ export async function getCustomerOrders(customerId: string): Promise<Order[]> {
       'order_description,product_name,product_image,unit_price,quantity,status,delivery_type,' +
       'delivery_choice,customer_address,location_link,customer_lat,customer_lng,shop_lat,shop_lng,' +
       'shop_name,created_at,updated_at,accepted_at,expires_at,rejection_reason,rejection_notes,' +
-      'otp_code,is_cancelled,cancelled_at,fulfillment_status,book_it_status,' +
+      'otp_code,order_code,is_cancelled,cancelled_at,fulfillment_status,book_it_status,' +
       'payment_screenshot_url,payment_status'
     )
     .eq('customer_id', customerId)
@@ -566,24 +571,29 @@ export async function markOrderDeliveredByOwner(orderId: string): Promise<Order>
   return data;
 }
 
-// Mark order as delivered with OTP verification (Self Delivery)
-export async function markOrderDeliveredWithOtp(orderId: string, otp: string): Promise<Order> {
-  // 1. Verify OTP
+// Verify 6-digit numeric Order ID and mark order as complete/delivered
+export async function verifyAndCompleteOrder(orderId: string, code: string): Promise<Order> {
+  // 1. Fetch order to verify code
   const { data: order, error: fetchError } = await supabase
     .from('orders')
-    .select('otp_code')
+    .select('order_code, otp_code')
     .eq('id', orderId)
     .single();
   
   if (fetchError) throw fetchError;
-  if (!order.otp_code) {
-    throw new Error('No OTP assigned to this order');
+  
+  // The primary verification is the 6-digit order_code (numerical)
+  const savedCode = order.order_code || order.otp_code;
+  
+  if (!savedCode) {
+    throw new Error('This order does not have a 6-digit verification ID assigned.');
   }
-  if (order.otp_code !== otp) {
-    throw new Error('Invalid OTP. Please check with the customer.');
+  
+  if (savedCode !== code) {
+    throw new Error('Invalid Order ID. Please check the 6-digit number shown on the customer\'s app.');
   }
 
-  // 2. Mark as delivered
+  // 2. Mark as delivered/complete
   const { data, error } = await supabase
     .from('orders')
     .update({
@@ -901,7 +911,7 @@ export function getStatusDisplayName(status: string): string {
     case 'collected':
       return 'Collected';
     case 'delivered':
-      return 'Delivered';
+      return 'Completed';
     default:
       return status;
   }

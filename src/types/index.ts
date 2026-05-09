@@ -30,6 +30,9 @@ export interface FeaturedProduct {
   description?: string;
   isActive: boolean;
   displayOrder: number;
+  stock?: number;
+  inventory?: number;
+  maxPerCustomer?: number;
   createdAt: Date;
   updatedAt: Date;
 }

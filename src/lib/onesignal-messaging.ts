@@ -1,5 +1,5 @@
-const ONESIGNAL_APP_ID = '1f14fad4-0d2f-465a-b3a8-e0e976b8729f';
-const ONESIGNAL_API_KEY = 'os_v2_app_d4kpvvanf5dfvm5i4duxnodst5kkr67zyxkuwj44vlvi2y6pjyotclk455gx4phg4ou4w7pf3qed6af3imveg4gj55nt4ohgc3kyd4a';
+const ONESIGNAL_APP_ID = '8941b4b0-6aaf-412a-917b-b14541ea2ebb';
+const ONESIGNAL_API_KEY = 'os_v2_app_rfa3jmdkv5asvel3wfcud2roxoetzkvb57bulxfhsz3762x2hykzimh6vmdtqvvnbybc5xgjdjan5r2wsoe4qxayenvetehsv3byzda';
 const ONESIGNAL_API_URL = 'https://onesignal.com/api/v1/notifications';
 
 export interface NotificationPayload {
@@ -172,7 +172,13 @@ export async function initializeOneSignal(): Promise<void> {
 
       if (window.OneSignal) {
         try {
-          window.OneSignal.init({ appId: ONESIGNAL_APP_ID });
+          window.OneSignal.init({ 
+            appId: ONESIGNAL_APP_ID,
+            safari_web_id: "web.onesignal.auto.0b3c1e09-f01e-4f75-a6ff-3f857f927766",
+            notifyButton: {
+              enable: true,
+            },
+          });
           window.OneSignalInitialized = true;
           if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
             try {

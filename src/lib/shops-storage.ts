@@ -38,7 +38,6 @@ export interface Shop {
   shopImageUrl: string;
   shopInteriorVideoUrl?: string | null;
   locationImageUrl: string;
-  locationMapLink: string;
   latitude?: number | null;
   longitude?: number | null;
   address?: string | null;
@@ -48,6 +47,7 @@ export interface Shop {
   country?: string | null;
   barberMembers: BarberMember[];
   services: Service[];
+  interiorImages?: string[];
   password: string;
   isOpen: boolean;
   tokenBookingPaused: boolean;
@@ -65,6 +65,8 @@ export interface Shop {
   isTokenBookingEnabled?: boolean;
   upiId?: string;
   advancePaymentMode?: 'none' | 'optional' | 'compulsory';
+  instagramId?: string;
+  facebookId?: string;
 }
 
 // Get all shops from Supabase

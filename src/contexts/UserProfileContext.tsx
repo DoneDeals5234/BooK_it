@@ -15,6 +15,11 @@ interface UserProfileContextType {
     latitude?: number;
     longitude?: number;
     google_map_link?: string;
+    email?: string;
+    instagram_url?: string;
+    facebook_url?: string;
+    instagram_id?: string;
+    facebook_id?: string;
   }) => Promise<boolean>;
   refreshProfile: () => Promise<void>;
 }
@@ -66,6 +71,11 @@ export const UserProfileProvider = ({ children }: { children: ReactNode }) => {
       latitude?: number;
       longitude?: number;
       google_map_link?: string;
+      email?: string;
+      instagram_url?: string;
+      facebook_url?: string;
+      instagram_id?: string;
+      facebook_id?: string;
     }
   ): Promise<boolean> => {
     if (!user) return false;
@@ -90,7 +100,13 @@ export const UserProfileProvider = ({ children }: { children: ReactNode }) => {
         }
       }
 
-      const savedProfile = await saveUserProfile(user.uid, name, phone, imageUrl, locationData);
+      // Inject email from user object if not provided in locationData
+      const finalLocationData = {
+        ...locationData,
+        email: locationData?.email || user.email || undefined
+      };
+
+      const savedProfile = await saveUserProfile(user.uid, name, phone, imageUrl, finalLocationData);
       if (savedProfile) {
         setProfile(savedProfile);
         return true;

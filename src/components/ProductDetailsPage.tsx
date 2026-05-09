@@ -205,7 +205,8 @@ export function ProductDetailsPage() {
             <img 
               src={product.images && product.images.length > 0 ? product.images[activeImageIndex] : product.imageUrl} 
               alt={product.title} 
-              className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-normal p-4 transition-all duration-300" 
+              className="w-full h-full object-contain p-4 transition-all duration-300" 
+              style={{ imageRendering: '-webkit-optimize-contrast' }}
               onError={(e) => { (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400'; }}
             />
           </div>
@@ -352,8 +353,13 @@ export function ProductDetailsPage() {
                     }}
                     className="w-[140px] bg-white rounded-2xl overflow-hidden border border-slate-200/60 shadow-sm hover:shadow-md transition-all flex flex-col cursor-pointer snap-start shrink-0 h-full"
                   >
-                    <div className="relative aspect-square p-2 bg-[#F4F6F9]">
-                      <img src={simProd.images && simProd.images.length > 0 ? simProd.images[0] : simProd.imageUrl} alt={simProd.title} className="w-full h-full object-contain mix-blend-multiply" />
+                    <div className="relative aspect-square bg-[#F4F6F9] overflow-hidden">
+                      <img 
+                        src={simProd.images && simProd.images.length > 0 ? simProd.images[0] : simProd.imageUrl} 
+                        alt={simProd.title} 
+                        className="w-full h-full object-cover transition-transform duration-500 hover:scale-110" 
+                        style={{ imageRendering: '-webkit-optimize-contrast' }}
+                      />
                     </div>
                     <div className="p-2 flex flex-col flex-1 gap-1">
                       <div className="flex items-center gap-1 bg-slate-100 w-max px-1.5 py-0.5 rounded-md mb-1">

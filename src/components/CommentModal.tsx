@@ -8,9 +8,10 @@ import { supabase } from '@/lib/supabase';
 interface CommentModalProps {
   videoId: string;
   onClose: () => void;
+  onCommentAdded?: () => void;
 }
 
-export const CommentModal = ({ videoId, onClose }: CommentModalProps) => {
+export const CommentModal = ({ videoId, onClose, onCommentAdded }: CommentModalProps) => {
   const { user } = useAuth();
   const { profile } = useUserProfile();
   const [comments, setComments] = useState<Comment[]>([]);
@@ -85,6 +86,7 @@ export const CommentModal = ({ videoId, onClose }: CommentModalProps) => {
 
       if (result) {
         setCommentText('');
+        if (onCommentAdded) onCommentAdded();
         // Comments will auto-load via subscription
       }
     } catch (error) {

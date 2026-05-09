@@ -15,8 +15,9 @@ import type { Shop } from '@/lib/shops-storage';
 import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
 import type { AppUpdateData } from '@/contexts/AppUpdateContext';
-import { type Order, getStatusColor, getStatusDisplayName, formatOrderDate, getOrderById, updateBookItStatus } from '@/lib/supabase-orders';
+import { type Order, getStatusColor, getStatusDisplayName, formatOrderDate, getOrderById, updateBookItStatus, verifyAndCompleteOrder } from '@/lib/supabase-orders';
 import { getUserProfile } from '@/lib/supabase-user-profiles';
+import { OtpVerificationModal } from './OtpVerificationModal';
 
 import { useNavigate } from 'react-router-dom';
 
@@ -29,6 +30,7 @@ const DeliveryRequestItem = ({ noti, onHandled }: { noti: any, onHandled: () => 
   const [order, setOrder] = useState<Order | null>(null);
   const [shop, setShop] = useState<Shop | null>(null);
   const [customerProfile, setCustomerProfile] = useState<any>(null);
+  const [showCompleteModal, setShowCompleteModal] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -227,19 +229,7 @@ const DeliveryRequestItem = ({ noti, onHandled }: { noti: any, onHandled: () => 
             size="sm" 
             variant={order?.book_it_status === 'delivered' ? 'default' : 'outline'} 
             className={`text-[9px] font-black h-9 rounded-lg ${order?.book_it_status === 'delivered' ? 'bg-blue-600' : ''}`}
-            onClick={async () => {
-              if (!order) return;
-              try {
-                console.log('🔄 Updating status to delivered for order:', order.id);
-                await updateBookItStatus(order.id, 'delivered');
-                const updated = await getOrderById(order.id);
-                setOrder(updated);
-                toast.success('✅ Status: Delivered');
-              } catch (err) {
-                console.error('❌ Failed to update status:', err);
-                toast.error('Failed to update: ' + (err instanceof Error ? err.message : 'Unknown error'));
-              }
-            }}
+            onClick={() => setShowCompleteModal(true)}
           >
             DELIVERED
           </Button>
@@ -266,6 +256,27 @@ const DeliveryRequestItem = ({ noti, onHandled }: { noti: any, onHandled: () => 
           )}
         </div>
       </div>
+
+      <OtpVerificationModal 
+        isOpen={showCompleteModal} 
+        onClose={() => setShowCompleteModal(false)} 
+        customerName={order?.customer_name || 'Customer'}
+        onConfirm={async (code) => {
+          if (!order) return;
+          try {
+            await verifyAndCompleteOrder(order.id, code);
+            await updateBookItStatus(order.id, 'delivered');
+            const updated = await getOrderById(order.id);
+            setOrder(updated);
+            toast.success('✅ Order Completed & Delivered');
+            setShowCompleteModal(false);
+          } catch (err) {
+            console.error('❌ Verification failed:', err);
+            toast.error(err instanceof Error ? err.message : 'Verification failed');
+            throw err;
+          }
+        }}
+      />
     </div>
   );
 };
@@ -286,6 +297,7 @@ export const StaffPortal = ({ onClose }: StaffPortalProps) => {
   const [uploadingApk, setUploadingApk] = useState(false);
   const [password, setPassword] = useState('');
   const [isAuthorized, setIsAuthorized] = useState(false);
+  const [verifyingOrder, setVerifyingOrder] = useState<Order | null>(null);
 
   const { user } = useAuth();
 
@@ -780,7 +792,19 @@ export const StaffPortal = ({ onClose }: StaffPortalProps) => {
                               </div>
                               <div className="flex justify-between items-center text-sm">
                                 <span>{order.product_name || 'Items'} x{order.quantity}</span>
-                                <span className="font-bold text-orange-600">₹{order.order_amount}</span>
+                                <div className="flex items-center gap-3">
+                                  <span className="font-bold text-orange-600">₹{order.order_amount}</span>
+                                  {!['delivered', 'rejected'].includes(order.status) && (
+                                    <Button 
+                                      size="sm" 
+                                      variant="outline" 
+                                      className="h-7 text-[9px] font-black uppercase rounded-lg border-blue-200 text-blue-600"
+                                      onClick={() => setVerifyingOrder(order)}
+                                    >
+                                      Complete
+                                    </Button>
+                                  )}
+                                </div>
                               </div>
                               {order.delivery_type === 'delivery' && (
                                 <div className="mt-2 text-[10px] font-black uppercase text-blue-600 bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded inline-block">
@@ -1295,6 +1319,26 @@ export const StaffPortal = ({ onClose }: StaffPortalProps) => {
           </div>
         </div>
       </div>
+      <OtpVerificationModal 
+        isOpen={!!verifyingOrder} 
+        onClose={() => setVerifyingOrder(null)} 
+        customerName={verifyingOrder?.customer_name || 'Customer'}
+        onConfirm={async (code) => {
+          if (!verifyingOrder) return;
+          try {
+            await verifyAndCompleteOrder(verifyingOrder.id, code);
+            toast.success('✅ Order Completed Successfully');
+            setVerifyingOrder(null);
+            // Refresh orders
+            const { data } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
+            if (data) setAllOrders(data);
+          } catch (err) {
+            console.error('❌ Verification failed:', err);
+            toast.error(err instanceof Error ? err.message : 'Verification failed');
+            throw err;
+          }
+        }}
+      />
     </div>
   );
 };

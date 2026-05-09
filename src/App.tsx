@@ -24,6 +24,7 @@ const WorldChatPage = lazy(() => import('@/components/WorldChatPage'));
 const OffersListPage = lazy(() => import('@/components/OffersListPage').then(m => ({ default: m.OffersListPage })));
 const CartPage = lazy(() => import('@/components/CartPage'));
 const BazarTab = lazy(() => import('@/components/BazarTab'));
+const UploadVideoPage = lazy(() => import('@/components/UploadVideoPage').then(m => ({ default: m.UploadVideoPage })));
 
 import { BookingModalNew } from '@/components/BookingModalNew';
 import { CategoryShopsPage } from '@/components/CategoryShopsPage';
@@ -327,7 +328,7 @@ function AppContentInner() {
 
           <Route path="/profile" element={
             <ProfilePage
-              onClose={() => navigate('/')}
+              onClose={() => navigate(-1)}
               onShopSelect={(shopId) => navigate(`/shop/${shopId}`)}
               initialTab={(new URLSearchParams(location.search).get('tab') as any) || 'today'}
               openInbox={location.search.includes('tab=inbox') ? 1 : 0}
@@ -336,7 +337,7 @@ function AppContentInner() {
 
           <Route path="/profile/:userId" element={
             <ProfilePage
-              onClose={() => navigate('/')}
+              onClose={() => navigate(-1)}
               onShopSelect={(shopId) => navigate(`/shop/${shopId}`)}
               targetUserId={location.pathname.split('/').pop()}
             />
@@ -370,6 +371,7 @@ function AppContentInner() {
           <Route path="/offers-list" element={<OffersListPage />} />
           <Route path="/cart" element={<CartPage />} />
           <Route path="/bazar" element={<BazarTab onShowLogin={() => setShowLoginPopup(true)} />} />
+          <Route path="/upload-video" element={<UploadVideoPage />} />
         </Routes>
       </Suspense>
     </div>

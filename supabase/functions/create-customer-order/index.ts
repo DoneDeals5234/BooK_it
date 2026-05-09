@@ -52,27 +52,20 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // 1. Assign OTP for delivery orders
-    let otpCode = null;
-    if (deliveryType === 'delivery') {
-      const { data: otpData } = await supabase
-        .from('otps')
-        .select('code');
-      
-      if (otpData && otpData.length > 0) {
-        const randomIndex = Math.floor(Math.random() * otpData.length);
-        otpCode = otpData[randomIndex].code;
-      }
-    }
+    // 1. Generate 6-digit numerical order code for verification/display
+    const orderCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-    // 2. Fetch shop data for notification and snapshot
+    // 2. Assign OTP for delivery orders (ensure it matches orderCode)
+    const otpCode = orderCode; 
+    
+    // 3. Fetch shop data for notification and snapshot
     const { data: shopData } = await supabase
       .from('shops')
       .select('owner_email, name')
       .eq('id', shopId)
       .single();
 
-    // 3. Insert the order
+    // 4. Insert the order
     const { data: order, error } = await supabase
       .from('orders')
       .insert([
@@ -100,6 +93,7 @@ serve(async (req) => {
           shop_lat: shopLat,
           shop_lng: shopLng,
           otp_code: otpCode,
+          order_code: orderCode,
           expires_at: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString()
         }
       ])

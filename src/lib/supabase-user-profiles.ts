@@ -5,6 +5,7 @@ export interface UserProfile {
   id: string;
   userId: string;
   name: string;
+  email?: string;
   phone: string;
   imageUrl?: string;
   address?: string;
@@ -15,6 +16,10 @@ export interface UserProfile {
   latitude?: number;
   longitude?: number;
   google_map_link?: string;
+  instagram_id?: string;
+  facebook_id?: string;
+  instagram_url?: string;
+  facebook_url?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -24,11 +29,17 @@ export const searchUserProfiles = async (query: string): Promise<UserProfile[]> 
   if (!query.trim()) return [];
 
   try {
-    const searchTerm = query.toLowerCase().trim();
+    const searchTerm = query.trim();
 
-    const { data, error } = await supabase
+    // Use server-side filtering for better performance and to handle missing columns gracefully
+    let queryBuilder = supabase
       .from('user_profiles')
       .select('*');
+    
+    // Search in name, email, and phone
+    queryBuilder = queryBuilder.or(`name.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%`);
+
+    const { data, error } = await queryBuilder;
 
     if (error) {
       console.error('Error searching profiles:', error);
@@ -37,32 +48,11 @@ export const searchUserProfiles = async (query: string): Promise<UserProfile[]> 
 
     if (!data) return [];
 
-    // Filter results based on query matching name, phone, email, or location fields
-    return (data as any[])
-      .filter((profile) => {
-        const name = (profile.name || '').toLowerCase();
-        const phone = (profile.phone || '').toLowerCase();
-        const address = (profile.address || '').toLowerCase();
-        const village = (profile.village || '').toLowerCase();
-        const district = (profile.district || '').toLowerCase();
-        const state = (profile.state || '').toLowerCase();
-        const country = (profile.country || '').toLowerCase();
-
-        // Check if query matches name, phone, address, village, district, state, or country
-        return (
-          name.includes(searchTerm) ||
-          phone.includes(searchTerm) ||
-          address.includes(searchTerm) ||
-          village.includes(searchTerm) ||
-          district.includes(searchTerm) ||
-          state.includes(searchTerm) ||
-          country.includes(searchTerm)
-        );
-      })
-      .map((profile) => ({
+    return (data as any[]).map((profile) => ({
         id: profile.id,
         userId: profile.user_id,
         name: profile.name,
+        email: profile.email,
         phone: profile.phone,
         imageUrl: sanitizeSupabaseUrl(profile.image_url),
         address: profile.address,
@@ -73,12 +63,56 @@ export const searchUserProfiles = async (query: string): Promise<UserProfile[]> 
         latitude: profile.latitude,
         longitude: profile.longitude,
         google_map_link: profile.google_map_link,
+        instagram_id: profile.instagram_id,
+        facebook_id: profile.facebook_id,
+        instagram_url: profile.instagram_url,
+        facebook_url: profile.facebook_url,
         createdAt: profile.created_at,
         updatedAt: profile.updated_at,
       }));
   } catch (error) {
     console.error('Error in searchUserProfiles:', error);
     return [];
+  }
+};
+
+export const getUserProfileByEmail = async (email: string): Promise<{ data: UserProfile | null; error: any }> => {
+  try {
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('*')
+      .eq('email', email)
+      .maybeSingle();
+
+    if (error) return { data: null, error };
+    if (!data) return { data: null, error: null };
+
+    const profile: UserProfile = {
+      id: data.id,
+      userId: data.user_id,
+      name: data.name,
+      email: data.email,
+      phone: data.phone,
+      imageUrl: sanitizeSupabaseUrl(data.image_url),
+      address: data.address,
+      village: data.village,
+      district: data.district,
+      state: data.state,
+      country: data.country,
+      latitude: data.latitude,
+      longitude: data.longitude,
+      google_map_link: data.google_map_link,
+      instagram_id: data.instagram_id,
+      facebook_id: data.facebook_id,
+      instagram_url: data.instagram_url,
+      facebook_url: data.facebook_url,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+    };
+
+    return { data: profile, error: null };
+  } catch (error) {
+    return { data: null, error };
   }
 };
 
@@ -112,6 +146,7 @@ export const getUserProfile = async (userId: string): Promise<UserProfile | null
       id: data.id,
       userId: data.user_id,
       name: data.name,
+      email: data.email,
       phone: data.phone,
       imageUrl: sanitizeSupabaseUrl(data.image_url),
       address: data.address,
@@ -122,6 +157,10 @@ export const getUserProfile = async (userId: string): Promise<UserProfile | null
       latitude: data.latitude,
       longitude: data.longitude,
       google_map_link: data.google_map_link,
+      instagram_id: data.instagram_id,
+      facebook_id: data.facebook_id,
+      instagram_url: data.instagram_url,
+      facebook_url: data.facebook_url,
       createdAt: data.created_at,
       updatedAt: data.updated_at,
     };
@@ -144,6 +183,7 @@ export const saveUserProfile = async (
   phone: string,
   imageUrl?: string,
   locationData?: {
+    email?: string;
     address?: string;
     village?: string;
     district?: string;
@@ -152,6 +192,10 @@ export const saveUserProfile = async (
     latitude?: number;
     longitude?: number;
     google_map_link?: string;
+    instagram_id?: string;
+    facebook_id?: string;
+    instagram_url?: string;
+    facebook_url?: string;
   }
 ): Promise<UserProfile> => {
   try {
@@ -174,6 +218,7 @@ export const saveUserProfile = async (
 
       // Add location data if provided
       if (locationData) {
+        if (locationData.email !== undefined) updateData.email = locationData.email;
         if (locationData.address !== undefined) updateData.address = locationData.address;
         if (locationData.village !== undefined) updateData.village = locationData.village;
         if (locationData.district !== undefined) updateData.district = locationData.district;
@@ -182,6 +227,10 @@ export const saveUserProfile = async (
         if (locationData.latitude !== undefined) updateData.latitude = locationData.latitude;
         if (locationData.longitude !== undefined) updateData.longitude = locationData.longitude;
         if (locationData.google_map_link !== undefined) updateData.google_map_link = locationData.google_map_link;
+        if (locationData.instagram_id !== undefined) updateData.instagram_id = locationData.instagram_id;
+        if (locationData.facebook_id !== undefined) updateData.facebook_id = locationData.facebook_id;
+        if (locationData.instagram_url !== undefined) updateData.instagram_url = locationData.instagram_url;
+        if (locationData.facebook_url !== undefined) updateData.facebook_url = locationData.facebook_url;
       }
 
       console.log('Updating profile:', { userId, updateData });
@@ -211,6 +260,7 @@ export const saveUserProfile = async (
         id: data.id,
         userId: data.user_id,
         name: data.name,
+        email: data.email,
         phone: data.phone,
         imageUrl: data.image_url,
         address: data.address,
@@ -221,6 +271,10 @@ export const saveUserProfile = async (
         latitude: data.latitude,
         longitude: data.longitude,
         google_map_link: data.google_map_link,
+        instagram_id: data.instagram_id,
+        facebook_id: data.facebook_id,
+        instagram_url: data.instagram_url,
+        facebook_url: data.facebook_url,
         createdAt: data.created_at,
         updatedAt: data.updated_at,
       };
@@ -237,6 +291,7 @@ export const saveUserProfile = async (
 
       // Add location data if provided
       if (locationData) {
+        insertData.email = locationData.email || null;
         insertData.address = locationData.address || null;
         insertData.village = locationData.village || null;
         insertData.district = locationData.district || null;
@@ -245,6 +300,10 @@ export const saveUserProfile = async (
         insertData.latitude = locationData.latitude || null;
         insertData.longitude = locationData.longitude || null;
         insertData.google_map_link = locationData.google_map_link || null;
+        insertData.instagram_id = locationData.instagram_id || null;
+        insertData.facebook_id = locationData.facebook_id || null;
+        insertData.instagram_url = locationData.instagram_url || null;
+        insertData.facebook_url = locationData.facebook_url || null;
       }
 
       console.log('Creating new profile:', insertData);
@@ -273,6 +332,7 @@ export const saveUserProfile = async (
         id: data.id,
         userId: data.user_id,
         name: data.name,
+        email: data.email,
         phone: data.phone,
         imageUrl: data.image_url,
         address: data.address,
@@ -283,6 +343,10 @@ export const saveUserProfile = async (
         latitude: data.latitude,
         longitude: data.longitude,
         google_map_link: data.google_map_link,
+        instagram_id: data.instagram_id,
+        facebook_id: data.facebook_id,
+        instagram_url: data.instagram_url,
+        facebook_url: data.facebook_url,
         createdAt: data.created_at,
         updatedAt: data.updated_at,
       };
