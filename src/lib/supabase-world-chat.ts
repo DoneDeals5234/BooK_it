@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { sendBroadcastNotification } from '@/lib/native-notifications';
 
 export interface WorldChatMessage {
   id: string;
@@ -14,7 +15,7 @@ export interface WorldChatMessage {
   };
 }
 
-// Add a world chat message
+// Add a world chat message — notify all users
 export const addWorldChatMessage = async (
   userName: string,
   message: string,
@@ -40,6 +41,17 @@ export const addWorldChatMessage = async (
     if (error) {
       console.error('❌ Error adding world chat message:', error);
       return null;
+    }
+
+    // Notify all shop owners (non-blocking)
+    if (userId) {
+      const { sendWorldChatNotification } = await import('@/lib/chat-notification-system');
+      sendWorldChatNotification({
+        senderName: userName,
+        message: message,
+        senderEmail: userEmail,
+        imageUrl: imageUrl,
+      }).catch(console.error);
     }
 
     return data as WorldChatMessage;

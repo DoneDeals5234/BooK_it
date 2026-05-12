@@ -1,12 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const ONESIGNAL_APP_ID =
-  Deno.env.get("ONESIGNAL_NATIVE_APP_ID") ||
-  "71048c28-503e-49e5-89b1-0de00ccdca4b";
-const ONESIGNAL_NATIVE_API_KEY =
-  "os_v2_app_oeciykcqhze6lcnrbxqaztokjnzez2oi76me4sv3y3p6gy5eu4kvf5qxzpuuraw25tybywnd3vg443ug2ln3os34jkyqd42llsnfjty";
-const ONESIGNAL_API_URL = "https://onesignal.com/api/v1/notifications";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "https://database.donedeals.shop";
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -138,69 +132,53 @@ serve(async (req: Request) => {
       );
     }
 
-    // Send notification to owner's device with foreground service trigger
-    const payload: Record<string, unknown> = {
-      app_id: ONESIGNAL_APP_ID,
-      headings: { en: `🔔 New Booking - ${customerName}` },
-      contents: { en: `${serviceName} at ${timeSlot}` },
-      include_player_ids: playerIds,
-      // Android: Heads-up notification settings
-      android_importance: 5, // HIGH - Shows as heads-up notification
-      android_priority: 10, // For older Android versions
-      android_small_icon: "scissors",
-      // iOS: High priority for immediate delivery
-      ios_badged: true,
-      ios_sound: "default",
-      // Data payload to trigger foreground service on owner's device
-      data: {
-        type: "new_order", // Triggers OrderNotificationExtension in Kotlin
-        action: "start_service_for_booking",
-        order_id: bookingRequestId || "",
-        customer_name: customerName || "",
-        amount: "0", // Default if not provided
-        quantity: "1",
-        delivery_type: "pickup",
-        triggerType: "booking_request",
-      },
-    };
+    // TRIGGER FCM NOTIFICATION
+    try {
+      console.log(`🔔 Sending FCM trigger to ${authorizedOwnerIds.length} owners...`);
+      
+      const notifyUrl = `${SUPABASE_URL}/functions/v1/send-notification-by-userid`;
+      const resp = await fetch(notifyUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${SUPABASE_SERVICE_KEY}`,
+        },
+        body: JSON.stringify({
+          user_ids: authorizedOwnerIds,
+          title: `🔔 New Booking - ${customerName}`,
+          body: `${serviceName} at ${timeSlot}`,
+          data: {
+            type: "new_order", // Triggers OrderAlarmService in MyFirebaseMessagingService.kt
+            action: "start_service_for_booking",
+            order_id: bookingRequestId || "",
+            customer_name: customerName || "",
+            amount: "0",
+            quantity: "1",
+            delivery_type: "pickup",
+            triggerType: "booking_request",
+          }
+        }),
+      });
 
-    console.log("📡 Sending foreground service trigger to OneSignal:", JSON.stringify(payload, null, 2));
+      const respData = await resp.json();
+      console.log("✅ FCM trigger sent:", respData);
 
-    const response = await fetch(ONESIGNAL_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json; charset=utf-8",
-        Authorization: `Key ${ONESIGNAL_API_KEY}`,
-      },
-      body: JSON.stringify(payload),
-    });
-
-    const responseText = await response.text();
-
-    console.log(`📋 OneSignal response status: ${response.status}`);
-    console.log(`📋 OneSignal response: ${responseText}`);
-
-    if (!response.ok) {
-      console.error("❌ OneSignal API Error:", responseText);
       return new Response(
         JSON.stringify({
-          error: "Failed to send foreground service trigger",
-          details: responseText,
+          success: true,
+          message: "Foreground service trigger sent successfully via FCM",
+          fcm_response: respData,
+          authorizedCount: authorizedOwnerIds.length,
         }),
-        { status: response.status, headers: { "Content-Type": "application/json", ...corsHeaders() } }
+        { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders() } }
+      );
+    } catch (fcmError) {
+      console.error("❌ FCM trigger failed:", fcmError);
+      return new Response(
+        JSON.stringify({ error: "Failed to send FCM trigger", details: String(fcmError) }),
+        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders() } }
       );
     }
-
-    console.log("✅ Foreground service trigger sent successfully");
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message: "Foreground service trigger sent successfully",
-        playerIdsCount: playerIds.length,
-        authorizedCount: authorizedOwnerIds.length,
-      }),
-      { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders() } }
-    );
   } catch (error) {
     console.error("❌ Error:", error);
     return new Response(

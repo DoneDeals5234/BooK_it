@@ -22,6 +22,7 @@ import { getUserDevicePassword, updateUserDevicePassword } from '@/lib/supabase-
 import { getUserProfile, type UserProfile } from '@/lib/supabase-user-profiles';
 import type { Video } from '@/lib/videos-storage';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
+import { useDeviceBackButton } from '@/lib/use-device-back-button';
 
 interface ProfilePageProps {
   onClose: () => void;
@@ -93,6 +94,18 @@ export const ProfilePage = ({
   const handleLongPressEnd = () => {}; // Simplified
 
   const tabOrder: BookingTab[] = ['today', 'history', 'campaigns', 'orders', 'posts'];
+
+  // Handle device back button
+  useDeviceBackButton({
+    onBackPressed: () => {
+      if (isExpanded) {
+        handleCloseExpanded();
+      } else {
+        onClose();
+      }
+    },
+    priority: 15 // Higher than home page
+  });
 
   useEffect(() => {
     const fetchTargetProfile = async () => {
@@ -246,7 +259,7 @@ export const ProfilePage = ({
         
         {/* Navigation Buttons */}
         <div className="relative z-20 flex justify-between p-4">
-          <button onClick={() => navigate(-1)} className="p-3 bg-white/10 backdrop-blur-xl rounded-2xl text-white border border-white/10 shadow-2xl hover:bg-white/20 transition-all">
+          <button onClick={() => navigate('/', { replace: true })} className="p-3 bg-white/10 backdrop-blur-xl rounded-2xl text-white border border-white/10 shadow-2xl hover:bg-white/20 transition-all">
             <ArrowLeft className="h-5 w-5" />
           </button>
           {isOwnProfile && !isEditing && (

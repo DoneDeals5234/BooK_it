@@ -47,7 +47,7 @@ serve(async (req) => {
       .from('orders')
       .update(updateData)
       .eq('id', orderId)
-      .select('customer_id, order_amount, shop_id')
+      .select('customer_id, order_amount, shop_id, customer_name, shop_name')
       .single();
 
     if (updateError) {
@@ -58,43 +58,56 @@ serve(async (req) => {
       )
     }
 
-    // Get Shop Name for notification
-    const { data: shopData } = await supabase
-      .from('shops')
-      .select('name')
-      .eq('id', order.shop_id)
-      .single();
-
-    const shopName = shopData?.name || 'the shop';
+    const shopName = order.shop_name || 'the shop';
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
+    const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
     // Notify Customer
     try {
-      console.log(`🔔 Notifying customer: ${order.customer_id} about ${action}`);
-      
-      const title = action === 'accept' ? 'Order Accepted! ✅' : 'Order Rejected ❌';
+      const title = action === 'accept' ? '✅ Order Accepted!' : '❌ Order Rejected';
       const body = action === 'accept' 
-        ? `Your order of ₹${order.order_amount} has been accepted by ${shopName}. Get ready to collect it!`
-        : `Your order of ₹${order.order_amount} has been declined. ${rejectionNotes || 'Please try again later.'}`;
+        ? `Great news! Your order of ₹${order.order_amount} from ${shopName} has been accepted.`
+        : `Your order of ₹${order.order_amount} from ${shopName} was declined. ${rejectionNotes || 'Please try again.'}`;
 
-      await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-notification-by-userid`, {
+      console.log(`🔔 Notifying customer: ${order.customer_id}`);
+      const custRes = await fetch(`${SUPABASE_URL}/functions/v1/send-native-notification`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-        },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SERVICE_KEY}` },
         body: JSON.stringify({
-          user_ids: [order.customer_id],
+          userIds: [order.customer_id],
           title,
           body,
-          data: { 
-            type: 'order_update', 
-            order_id: orderId,
-            status
-          }
+          data: { type: 'order_update', order_id: orderId, status }
         }),
       });
-    } catch (notifyError) {
-      console.error('⚠️ Failed to notify customer about order action:', notifyError);
+      console.log(`📱 Customer notification: ${custRes.status}`);
+    } catch (e) {
+      console.error('⚠️ Customer notification failed:', e);
+    }
+
+    // Notify Shop Owner (confirmation of their own action)
+    try {
+      const { data: shopOwners } = await supabase
+        .from('shop_owners')
+        .select('user_id')
+        .eq('shop_id', order.shop_id);
+
+      if (shopOwners && shopOwners.length > 0) {
+        const ownerUserIds = shopOwners.map((o: any) => o.user_id).filter(Boolean);
+        const ownerTitle = action === 'accept' ? '✅ Order Confirmed' : '🗑️ Order Declined';
+        const ownerBody = action === 'accept'
+          ? `You accepted ${order.customer_name}'s order for ₹${order.order_amount}.`
+          : `You declined ${order.customer_name}'s order for ₹${order.order_amount}.`;
+
+        const ownerRes = await fetch(`${SUPABASE_URL}/functions/v1/send-native-notification`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SERVICE_KEY}` },
+          body: JSON.stringify({ userIds: ownerUserIds, title: ownerTitle, body: ownerBody, data: { type: 'order_action', order_id: orderId, status } }),
+        });
+        console.log(`📩 Owner notification: ${ownerRes.status}`);
+      }
+    } catch (e) {
+      console.error('⚠️ Owner notification failed:', e);
     }
 
     return new Response(

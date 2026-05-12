@@ -41,8 +41,20 @@ interface CartItem {
 export default function CartPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [items, setItems] = useState<CartItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [items, setItems] = useState<CartItem[]>(() => {
+    try {
+      const cached = localStorage.getItem('bazar_cart_cache');
+      if (cached) return JSON.parse(cached) || [];
+    } catch(e) {}
+    return [];
+  });
+  const [loading, setLoading] = useState(() => {
+    try {
+      const cached = localStorage.getItem('bazar_cart_cache');
+      if (cached) return false;
+    } catch(e) {}
+    return true;
+  });
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
   const showNotification = async (title: string, body: string) => {
@@ -104,6 +116,12 @@ export default function CartPage() {
 
     loadCart();
   }, [user, navigate]);
+
+  useEffect(() => {
+    if (!loading && items) {
+      try { localStorage.setItem('bazar_cart_cache', JSON.stringify(items)); } catch(e) {}
+    }
+  }, [items, loading]);
 
   const updateQuantity = async (itemId: string, newQuantity: number) => {
     if (newQuantity < 1) return;

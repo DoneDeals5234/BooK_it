@@ -1,12 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 
-const ONESIGNAL_APP_ID =
-  Deno.env.get("ONESIGNAL_NATIVE_APP_ID") ||
-  "71048c28-503e-49e5-89b1-0de00ccdca4b";
-const ONESIGNAL_API_KEY =
-  "os_v2_app_oeciykcqhze6lcnrbxqaztokjnzez2oi76me4sv3y3p6gy5eu4kvf5qxzpuuraw25tybywnd3vg443ug2ln3os34jkyqd42llsnfjty";
-const ONESIGNAL_API_URL = "https://onesignal.com/api/v1/notifications";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "https://database.donedeals.shop";
 const SUPABASE_SERVICE_KEY = Deno.env.get("SERVICE_ROLE_KEY") || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ta3JmZWh1dmZ0bnR1cWpteHFxIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTkwNDM4MywiZXhwIjoyMDc3NDgwMzgzfQ.XGaLped_nvzTiQnycJHnodgYGb2QIA5N_-f3Qe8K3Xo";
 
@@ -87,168 +81,69 @@ serve(async (req: Request) => {
           `📤 Processing reminder ${reminder.id} for booking ${reminder.booking_id} to user ${reminder.user_id}`
         );
 
-        // Build base notification payload using include_aliases pattern (like send-notification-by-userid)
-        const basePayload: Record<string, unknown> = {
-          app_id: ONESIGNAL_APP_ID,
-          headings: { en: "🔔 Appointment Reminder" },
-          contents: {
-            en: `Are you ready to come to ${reminder.shop_name} for your appointment at ${reminder.time_slot}?`,
-          },
-          include_aliases: {
-            external_id: [reminder.user_id], // Target by external_id alias
-          },
-          target_channel: "push", // ✅ Required when using targeting by alias
-          data: {
-            bookingId: reminder.booking_id,
-            tokenNumber: String(reminder.token_number),
-            shopName: reminder.shop_name,
-            userName: reminder.user_name,
-            timeSlot: reminder.time_slot,
-            shopId: reminder.shop_id,
-            actionType: "reminder",
-          },
-          // Unified buttons for web and native - allows users to respond directly from notification
-          buttons: [
-            {
-              id: `yes-${reminder.booking_id}`,
-              text: "Yes, I'm Coming",
+        // TRIGGER FCM NOTIFICATION
+        try {
+          console.log(`🔔 Sending FCM reminder for user ${reminder.user_id}...`);
+          
+          const notifyUrl = `${SUPABASE_URL}/functions/v1/send-notification-by-userid`;
+          const resp = await fetch(notifyUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${SUPABASE_SERVICE_KEY}`,
             },
-            {
-              id: `no-${reminder.booking_id}`,
-              text: "No, Cancel",
-            },
-          ],
-          isAndroid: true,
-          isIos: true,
-          // Android heads-up notification settings with MAXIMUM priority
-          android_importance: 5, // MAXIMUM (5) - Shows as heads-up notification with sound/vibration
-          android_priority: 10, // MAXIMUM (10) - For older Android versions
-          // 🔔 Android: Custom 6-second alarm sound
-          android_sound: "https://cdn.builder.io/o/assets%2Feb9adfe1406b4af7a3d0ffeb05e4f67c%2F33c43978ea664c249ea07a12740e2204?alt=media&token=f4aada56-14c4-4a27-a5f6-1b9838a08133&apiKey=eb9adfe1406b4af7a3d0ffeb05e4f67c",
-          // 🔔 iOS: Keep default single blink sound
-          ios_sound: "default",
-          ios_badged: true,
-          // Additional high-priority settings
-          big_picture: true,
-          ios_critical_sound: true,
-        };
+            body: JSON.stringify({
+              user_ids: [reminder.user_id],
+              title: "🔔 Appointment Reminder",
+              body: `Are you ready to come to ${reminder.shop_name} for your appointment at ${reminder.time_slot}?`,
+              data: {
+                bookingId: reminder.booking_id,
+                tokenNumber: String(reminder.token_number),
+                shopName: reminder.shop_name,
+                userName: reminder.user_name,
+                timeSlot: reminder.time_slot,
+                shopId: reminder.shop_id,
+                actionType: "reminder",
+              }
+            }),
+          });
 
-        console.log(`📡 Sending 3 reminder notifications to OneSignal for user ${reminder.user_id}`);
-        console.log(`   Booking: ${reminder.shop_name} at ${reminder.time_slot}`);
+          const respData = await resp.json();
+          console.log(`✅ FCM reminder sent for ${reminder.id}:`, respData);
 
-        // Send 3 notifications at 10-second intervals
-        const notificationIntervalSeconds = 10;
-        const notificationCount = 3;
-        let notificationsSent = 0;
+          // Mark reminder as sent in database
+          const { error: updateError } = await supabase
+            .from("alert_reminders")
+            .update({
+              sent: true,
+              sent_at: now.toISOString(),
+              updated_at: now.toISOString(),
+            })
+            .eq("id", reminder.id);
 
-        for (let i = 0; i < notificationCount; i++) {
-          const payload = { ...basePayload } as Record<string, unknown>;
-
-          // Add delay for subsequent notifications
-          if (i > 0) {
-            // Schedule the 2nd and 3rd notifications with send_after delays
-            payload.send_after = Math.floor(Date.now() / 1000) + (notificationIntervalSeconds * i);
-            console.log(`   🔔 Notification ${i + 1}/${notificationCount} scheduled for ${notificationIntervalSeconds * i} seconds from now`);
-          } else {
-            console.log(`   🔔 Notification ${i + 1}/${notificationCount} sending immediately`);
-          }
-
-          // Add unique identifier to prevent OneSignal deduplication
-          payload.id = `${reminder.id}-seq-${i + 1}`;
-
-          // Add unique content variations to ensure distinct notifications
-          const notificationHeading = i === 0
-            ? "🔔 Appointment Reminder"
-            : i === 1
-            ? "⏰ Appointment Reminder (Final Call)"
-            : "🚨 Last Reminder - Your Appointment Now!";
-
-          payload.headings = { en: notificationHeading };
-
-          // Add sequence info to the notification
-          payload.data = {
-            ...basePayload.data,
-            notificationSequence: `${i + 1}/3`,
-            reminderIndex: i + 1,
-          };
-
-          try {
-            const response = await fetch(ONESIGNAL_API_URL, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json; charset=utf-8",
-                Authorization: `Key ${ONESIGNAL_API_KEY}`,
-              },
-              body: JSON.stringify(payload),
+          if (updateError) {
+            console.error(`⚠️ Failed to mark reminder as sent:`, updateError);
+            results.push({
+              reminderId: reminder.id,
+              status: "sent_but_not_marked",
+              error: "Database update failed",
             });
-
-            const responseText = await response.text();
-
-            if (!response.ok) {
-              console.error(
-                `❌ Failed to send reminder ${reminder.id} notification ${i + 1}:`,
-                responseText
-              );
-            } else {
-              console.log(
-                `✅ Notification ${i + 1}/${notificationCount} sent successfully to OneSignal for reminder ${reminder.id}`
-              );
-              notificationsSent++;
-            }
-          } catch (error) {
-            console.error(`❌ Error sending notification ${i + 1}:`, error);
+            failureCount++;
+          } else {
+            successCount++;
+            results.push({
+              reminderId: reminder.id,
+              status: "sent",
+              fcm_response: respData
+            });
           }
-        }
-
-        if (notificationsSent === 0) {
-          console.error(
-            `❌ Failed to send any reminder notifications for reminder ${reminder.id}`
-          );
-          results.push({
-            reminderId: reminder.id,
-            bookingId: reminder.booking_id,
-            userId: reminder.user_id,
-            status: "failed",
-            error: "All notification sends failed",
-          });
+        } catch (fcmError) {
+          console.error(`❌ FCM reminder failed for ${reminder.id}:`, fcmError);
           failureCount++;
-          continue;
-        }
-
-        console.log(
-          `✅ ${notificationsSent} notification(s) sent successfully to OneSignal for reminder ${reminder.id}`
-        );
-
-        // Mark reminder as sent in database
-        const { error: updateError } = await supabase
-          .from("alert_reminders")
-          .update({
-            sent: true,
-            sent_at: now.toISOString(),
-            updated_at: now.toISOString(),
-          })
-          .eq("id", reminder.id);
-
-        if (updateError) {
-          console.error(`⚠️ Failed to mark reminder as sent:`, updateError);
           results.push({
             reminderId: reminder.id,
-            bookingId: reminder.booking_id,
-            userId: reminder.user_id,
-            status: "sent_but_not_marked",
-            error: "Database update failed",
-            notificationsSent,
-          });
-          failureCount++;
-        } else {
-          console.log(`✅ Reminder ${reminder.id} marked as sent in database`);
-          successCount++;
-          results.push({
-            reminderId: reminder.id,
-            bookingId: reminder.booking_id,
-            userId: reminder.user_id,
-            status: "sent",
-            notificationsSent,
+            status: "error",
+            error: String(fcmError),
           });
         }
       } catch (error) {

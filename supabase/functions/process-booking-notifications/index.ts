@@ -16,10 +16,7 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    const oneSignalApiKey = "os_v2_app_oeciykcqhze6lcnrbxqaztokjnzez2oi76me4sv3y3p6gy5eu4kvf5qxzpuuraw25tybywnd3vg443ug2ln3os34jkyqd42llsnfjty";
-    const oneSignalAppId = Deno.env.get("ONESIGNAL_APP_ID");
-
-    if (!supabaseUrl || !supabaseServiceKey || !oneSignalApiKey || !oneSignalAppId) {
+    if (!supabaseUrl || !supabaseServiceKey) {
       throw new Error("Missing required environment variables");
     }
 
@@ -53,35 +50,31 @@ serve(async (req) => {
     // Process each notification
     for (const notification of pendingNotifications) {
       try {
-        // Send notification via OneSignal
-        const response = await fetch("https://onesignal.com/api/v1/notifications", {
+        // TRIGGER FCM NOTIFICATION
+        console.log(`🔔 Sending FCM trigger to user ${notification.shop_owner_user_id}...`);
+        
+        const notifyUrl = `${supabaseUrl}/functions/v1/send-notification-by-userid`;
+        const resp = await fetch(notifyUrl, {
           method: "POST",
           headers: {
-            "Content-Type": "application/json; charset=utf-8",
-            Authorization: `Key ${oneSignalApiKey}`,
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${supabaseServiceKey}`,
           },
           body: JSON.stringify({
-            app_id: oneSignalAppId,
-            include_aliases: {
-              external_id: [notification.shop_owner_user_id],
-            },
-            target_channel: "push",
-            headings: { en: notification.notification_title },
-            contents: { en: notification.notification_body },
-            data: notification.notification_data || {},
-            ttl: 86400, // 24 hours
+            user_ids: [notification.shop_owner_user_id],
+            title: notification.notification_title,
+            body: notification.notification_body,
+            data: notification.notification_data || {}
           }),
         });
 
-        if (!response.ok) {
-          const errorBody = await response.text();
-          throw new Error(
-            `OneSignal API error: ${response.status} - ${errorBody}`
-          );
+        if (!resp.ok) {
+          const errorBody = await resp.text();
+          throw new Error(`FCM error: ${resp.status} - ${errorBody}`);
         }
 
-        const result = await response.json();
-        console.log(`Notification sent successfully. OneSignal ID: ${result.body.id}`);
+        const result = await resp.json();
+        console.log(`Notification sent successfully via FCM.`);
 
         // Mark notification as sent
         const { error: updateError } = await supabase

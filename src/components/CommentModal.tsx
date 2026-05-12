@@ -86,8 +86,14 @@ export const CommentModal = ({ videoId, onClose, onCommentAdded }: CommentModalP
 
       if (result) {
         setCommentText('');
+        
+        // Optimistic update: Add the comment to local state immediately
+        setComments((prev) => {
+          if (prev.some(c => c.id === result.id)) return prev;
+          return [result, ...prev];
+        });
+
         if (onCommentAdded) onCommentAdded();
-        // Comments will auto-load via subscription
       }
     } catch (error) {
       console.error('Error posting comment:', error);

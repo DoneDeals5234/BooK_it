@@ -13,6 +13,7 @@ import toast from 'react-hot-toast';
 import { CommentModal } from '@/components/CommentModal';
 import { getCommentCount } from '@/lib/supabase-comments';
 import { shareToInstagram, shareToWhatsApp } from '@/lib/video-share';
+import { useDeviceBackButton } from '@/lib/use-device-back-button';
 import './ShortVideosPage.css';
 
 // WhatsApp Icon
@@ -52,6 +53,14 @@ export default function ShortVideosPage({ onClose }: ShortVideosPageProps) {
   const videoElementRef = useRef<HTMLVideoElement>(null);
   const preloadedVideosRef = useRef<Map<string, HTMLVideoElement>>(new Map());
   const { user: currentUser } = useAuth();
+  
+  // Handle device back button
+  useDeviceBackButton({
+    onBackPressed: () => {
+      onClose();
+    },
+    priority: 20 // High priority
+  });
 
   // Load initial videos with smart preloading
   useEffect(() => {

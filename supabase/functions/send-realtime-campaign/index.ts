@@ -42,10 +42,8 @@ serve(async (req: Request) => {
       throw new Error(`Campaign not found: ${campaignError?.message}`);
     }
 
-    // 2. BROADCAST: Insert into campaign_broadcasts table
-    // This table is watched by all clients via Supabase Realtime (postgres_changes)
-    console.log("📡 Inserting into campaign_broadcasts table for Realtime trigger");
-    
+    // 2. BROADCAST: Insert into campaign_broadcasts table for Realtime listeners
+    console.log("📡 Inserting into campaign_broadcasts for Realtime trigger");
     const { error: broadcastError } = await supabase
       .from("campaign_broadcasts")
       .insert({
@@ -58,39 +56,94 @@ serve(async (req: Request) => {
       });
 
     if (broadcastError) {
-      console.error("⚠️ Realtime broadcast insert failed:", broadcastError.message, broadcastError.code);
-      console.error("Details:", JSON.stringify(broadcastError, null, 2));
-      // We continue to OneSignal even if this fails
+      console.error("⚠️ Realtime broadcast insert failed:", broadcastError.message);
     } else {
-      console.log("✅ Realtime broadcast record created successfully");
+      console.log("✅ Realtime broadcast record created");
     }
-    
-    // 3. BACKUP: Trigger OneSignal (via existing send-campaign logic)
-    console.log(`🏹 Triggering OneSignal backup via: ${supabaseUrl}/functions/v1/send-campaign`);
-    const onesignalFunctionUrl = `${supabaseUrl}/functions/v1/send-campaign`;
-    
+
+    // 3. FCM: Fetch matching user IDs from user_profiles based on target geography
+    let userIds: string[] = [];
     try {
-      const resp = await fetch(onesignalFunctionUrl, {
+      // Fetch targets from campaign_targets table
+      const { data: targets } = await supabase
+        .from("campaign_targets")
+        .select("*")
+        .eq("campaign_id", campaign_id);
+      
+      const campaignTarget = targets?.[0] || target;
+      console.log(`🎯 Targeting criteria:`, JSON.stringify(campaignTarget));
+
+      let hasFilters = campaignTarget && (campaignTarget.country || campaignTarget.state || campaignTarget.district || campaignTarget.village);
+
+      if (hasFilters) {
+        let query = supabase.from("user_profiles").select("user_id");
+        if (campaignTarget.country) query = query.eq("country", campaignTarget.country);
+        if (campaignTarget.state) query = query.eq("state", campaignTarget.state);
+        if (campaignTarget.district) query = query.eq("district", campaignTarget.district);
+        if (campaignTarget.village) query = query.eq("village", campaignTarget.village);
+
+        const { data: matchedUsers } = await query;
+        userIds = (matchedUsers || []).map((u: any) => u.user_id).filter(Boolean);
+        console.log(`🎯 Matched ${userIds.length} users by geography`);
+      }
+
+      // If no geography filter matched or no filters provided, fall back to ALL users with FCM tokens
+      if (userIds.length === 0) {
+        console.log("⚠️ No geographic match or no filters — broadcasting to ALL users with FCM tokens");
+        const { data: allDevices } = await supabase
+          .from("native_devices")
+          .select("user_id")
+          .not("fcm_token", "is", null);
+        
+        userIds = [...new Set((allDevices || []).map((d: any) => d.user_id))];
+        console.log(`📱 Total broadcast target: ${userIds.length} users`);
+      }
+    } catch (e) {
+      console.error("❌ Error fetching target users:", e);
+    }
+
+    // 4. Send FCM notification directly via send-native-notification
+    let fcmResult: any = null;
+    if (userIds.length > 0) {
+      console.log(`🔥 Sending campaign FCM to ${userIds.length} users...`);
+      const fcmResp = await fetch(`${supabaseUrl}/functions/v1/send-native-notification`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${supabaseServiceKey}`
         },
-        body: JSON.stringify({ campaign_id })
+        body: JSON.stringify({
+          userIds,
+          title: campaign.title,
+          body: campaign.message,
+          data: {
+            type: "campaign",
+            campaign_id,
+            route: "/",
+            ...(campaign.image_url ? { imageUrl: campaign.image_url } : {}),
+            ...(campaign.shop_id ? { shop_id: campaign.shop_id } : {})
+          }
+        })
       });
-      
-      const respData = await resp.text();
-      console.log(`✅ OneSignal backup response: ${resp.status}`);
-      console.log(`📋 Backup response body: ${respData}`);
-    } catch (err) {
-      console.error("❌ OneSignal backup failed to trigger (fetch error):", err.message);
+      fcmResult = await fcmResp.json();
+      console.log(`✅ FCM campaign result: ${fcmResp.status} —`, JSON.stringify(fcmResult));
+    } else {
+      console.warn("⚠️ No users to send campaign to");
     }
 
+    // 5. Update campaign status
+    await supabase
+      .from("campaigns")
+      .update({ status: "sent", sent_at: new Date().toISOString() })
+      .eq("id", campaign_id);
+
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        message: "Campaign broadcast initiated and backup triggered",
-        campaign_id 
+      JSON.stringify({
+        success: true,
+        message: "Campaign broadcast initiated",
+        campaign_id,
+        users_targeted: userIds.length,
+        fcm_result: fcmResult
       }),
       { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders() } }
     );

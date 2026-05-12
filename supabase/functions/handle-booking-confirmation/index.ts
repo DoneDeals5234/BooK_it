@@ -2,12 +2,6 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.78.0";
 import { jwtDecode } from "https://esm.sh/jwt-decode@4.0.0";
 
-const ONESIGNAL_NATIVE_APP_ID =
-  Deno.env.get("ONESIGNAL_NATIVE_APP_ID") ||
-  "71048c28-503e-49e5-89b1-0de00ccdca4b";
-const ONESIGNAL_NATIVE_API_KEY =
-  "os_v2_app_oeciykcqhze6lcnrbxqaztokjnzez2oi76me4sv3y3p6gy5eu4kvf5qxzpuuraw25tybywnd3vg443ug2ln3os34jkyqd42llsnfjty";
-const ONESIGNAL_API_URL = "https://onesignal.com/api/v1/notifications";
 
 function corsHeaders() {
   return {
@@ -148,50 +142,38 @@ serve(async (req: Request) => {
       notificationBody = `${booking.user_name} cancelled their booking for ${booking.service_name} at ${booking.time_slot}`;
     }
 
-    const notificationPayload: Record<string, any> = {
-      app_id: ONESIGNAL_NATIVE_APP_ID,
-      headings: { en: notificationTitle },
-      contents: { en: notificationBody },
-      include_aliases: {
-        external_id: [ownerId],
-      },
-      target_channel: "push",
-      android_importance: 5,
-      android_priority: 10,
-      android_small_icon: "scissors",
-      ios_badged: true,
-      ios_sound: "default",
-      data: {
-        booking_id,
-        type: action === "confirmed" ? "customer_confirmed" : "customer_cancelled",
-        customer_name: booking.user_name,
-        token_number: booking.token_number,
-        service_name: booking.service_name,
-        time_slot: booking.time_slot,
-      },
-    };
-
-    console.log(`📡 Sending OneSignal notification to owner:`, notificationTitle);
-
-    const response = await fetch(ONESIGNAL_API_URL, {
+    // TRIGGER FCM NOTIFICATION
+    console.log(`🔔 Sending FCM trigger to owner ${ownerId}:`, notificationTitle);
+    
+    const notifyUrl = `${supabaseUrl}/functions/v1/send-notification-by-userid`;
+    const resp = await fetch(notifyUrl, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json; charset=utf-8",
-        Authorization: `Key ${ONESIGNAL_API_KEY}`,
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${supabaseServiceKey}`,
       },
-      body: JSON.stringify(notificationPayload),
+      body: JSON.stringify({
+        user_ids: [ownerId],
+        title: notificationTitle,
+        body: notificationBody,
+        data: {
+          booking_id,
+          type: action === "confirmed" ? "customer_confirmed" : "customer_cancelled",
+          customer_name: booking.user_name,
+          token_number: booking.token_number,
+          service_name: booking.service_name,
+          time_slot: booking.time_slot,
+        }
+      }),
     });
 
-    const responseText = await response.text();
-
-    if (!response.ok) {
-      console.error("OneSignal API Error:", responseText);
-      // Don't fail the entire request if notification fails
+    if (!resp.ok) {
+      const errorText = await resp.text();
+      console.error(`❌ FCM error: ${resp.status} - ${errorText}`);
       console.warn("⚠️ Notification send failed but booking status was updated");
     } else {
-      const onesignalResponse = JSON.parse(responseText);
-      const notificationId = onesignalResponse.body?.notification_id;
-      console.log(`✅ OneSignal notification sent: ${notificationId}`);
+      const onesignalResponse = await resp.json();
+      console.log(`✅ FCM notification sent successfully`);
 
       // 5. Update booking to mark owner as notified
       await supabase

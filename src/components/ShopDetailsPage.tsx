@@ -24,6 +24,8 @@ import type { Shop } from '@/lib/shops-storage';
 import type { Booking } from '@/lib/bookings-storage';
 import type { ShopOffer } from '@/types';
 import { useNavigate } from 'react-router-dom';
+import { getCachedShops } from '@/lib/shops-cache';
+import { useDeviceBackButton } from '@/lib/use-device-back-button';
 
 interface ShopDetailsPageProps {
   shopId: string;
@@ -50,12 +52,19 @@ export const ShopDetailsPage = ({
   isBarberPortal = false,
   onShowLogin = () => { },
 }: ShopDetailsPageProps) => {
-  const [shop, setShop] = useState<Shop | null>(null);
+  const navigate = useNavigate();
+  const [shop, setShop] = useState<Shop | null>(() => {
+    const cachedShops = getCachedShops();
+    return cachedShops ? cachedShops.find(s => s.id === shopId) || null : null;
+  });
   const [bookings, setBookings] = useState<BookingWithCustomer[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [featuredProducts, setFeaturedProducts] = useState<FeaturedProduct[]>([]);
   const [shopOffers, setShopOffers] = useState<ShopOffer[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => {
+    const cachedShops = getCachedShops();
+    return !(cachedShops && cachedShops.some(s => s.id === shopId));
+  });
   const [reviewsLoading, setReviewsLoading] = useState(false);
   const [featuredProductsLoading, setFeaturedProductsLoading] = useState(false);
   const [offersLoading, setOffersLoading] = useState(false);
@@ -68,9 +77,15 @@ export const ShopDetailsPage = ({
   const [showCustomizer, setShowCustomizer] = useState(false);
   const [cssVars, setCssVars] = useState<Record<string, string>>({});
   const [showBookingModal, setShowBookingModal] = useState(false);
-  const [showOrderModal, setShowOrderModal] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<FeaturedProduct | null>(null);
   const { activeReminder, confirmReminder, cancelReminder } = useBookingReminder();
+
+  // Handle device back button
+  useDeviceBackButton({
+    onBackPressed: () => {
+      navigate('/', { replace: true });
+    },
+    priority: 15
+  });
 
   // Load customization
   useEffect(() => {
@@ -320,7 +335,7 @@ export const ShopDetailsPage = ({
             <Button
               variant="secondary"
               size="icon"
-              onClick={() => navigate(-1)}
+              onClick={() => navigate('/', { replace: true })}
               className="rounded-full bg-white/80 backdrop-blur-sm shadow-md hover:bg-white border-none h-8 w-8 sm:h-10 sm:w-10"
             >
               <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
@@ -785,8 +800,7 @@ export const ShopDetailsPage = ({
                               </Button>
                               <Button
                                 onClick={() => {
-                                  setSelectedProduct(product);
-                                  setShowOrderModal(true);
+                                  navigate(`/checkout/${product.id}`, { state: { product, shop } });
                                 }}
                                 className="flex-1 text-[9px] sm:text-[11px] font-bold bg-red-600 hover:bg-red-700 text-white h-7 sm:h-8 px-1 shadow-sm"
                               >
@@ -1001,25 +1015,7 @@ export const ShopDetailsPage = ({
         />
       )}
 
-      {/* Order Amount Modal */}
-      {shop && (
-        <OrderAmountModal
-          isOpen={showOrderModal}
-          onClose={() => {
-            setShowOrderModal(false);
-            setSelectedProduct(null);
-          }}
-          shopId={shop.id}
-          shopName={shop.name}
-          productName={selectedProduct?.title || 'Product'}
-          productImage={selectedProduct?.imageUrl}
-          productPrice={selectedProduct?.price ? parseFloat(String(selectedProduct.price)) : undefined}
-          shopLat={shop.latitude ?? undefined}
-          shopLng={shop.longitude ?? undefined}
-          shopMapLink={shop.locationMapLink}
-          initialAmount={selectedProduct?.price ? parseFloat(String(selectedProduct.price)) : 0}
-        />
-      )}
+      {/* OrderAmountModal component removed */}
 
       {/* Reminder Alert Dialog */}
       {activeReminder && (

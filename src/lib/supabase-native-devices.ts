@@ -1,11 +1,12 @@
 import { supabase } from '@/lib/supabase';
-import { getPendingPlayerId, clearPendingPlayerId } from '@/lib/capacitor-notifications';
+// Removed OneSignal imports
 
 export interface NativeDeviceRecord {
   userId: string;
   email: string | null;
   password?: string | null;
   playerId: string | null;
+  fcmToken?: string | null;
   deviceType?: string;
 }
 
@@ -32,6 +33,7 @@ export async function saveNativeDevice(record: NativeDeviceRecord): Promise<bool
       email: email || '',
       password: record.password || '',
       playerId,
+      fcmToken: record.fcmToken || null,
       deviceType,
     };
 
@@ -91,21 +93,19 @@ export async function linkNativeDeviceToUser(
       return true;
     }
 
-    // Check if there's a pending player ID from the subscription event
-    const pendingPlayerId = getPendingPlayerId();
-
-    if (pendingPlayerId) {
-      console.log('✅ Found pending player ID from subscription event:', pendingPlayerId);
-    } else {
-      console.log('⏳ No pending player ID yet - creating record, will be updated when subscription event fires');
-    }
+    // FCM-based linking logic
+    const pendingPlayerId = null;
 
     // Call the Edge Function to link the device (works with or without playerId)
+    const { getCurrentFcmToken } = await import('@/lib/fcm-manager');
+    const fcmToken = getCurrentFcmToken();
+
     const payload = {
       userId,
       email: email || '',
       password: password || '',
       playerId: pendingPlayerId || null,
+      fcmToken: fcmToken || null,
       deviceType,
     };
 
@@ -126,13 +126,7 @@ export async function linkNativeDeviceToUser(
     }
 
     const result = await response.json();
-
-    if (pendingPlayerId) {
-      clearPendingPlayerId();
-      console.log('✅ Native device linked to user successfully:', result.data);
-    } else {
-      console.log('✅ Native device record created (waiting for player ID from subscription event):', result.data);
-    }
+    console.log('✅ Native device linked to user successfully:', result.data);
 
     return true;
   } catch (error) {
@@ -180,6 +174,27 @@ export async function getPlayerIdFromNativeDevices(userId: string): Promise<stri
     return playerId;
   } catch (error) {
     console.error('Error in getPlayerIdFromNativeDevices:', error);
+    return null;
+  }
+}
+
+/**
+ * Get FCM token from native_devices table for a user
+ */
+export async function getFcmTokenFromNativeDevices(userId: string): Promise<string | null> {
+  try {
+    if (!userId) return null;
+
+    const { data, error } = await supabase
+      .from('native_devices')
+      .select('fcm_token')
+      .eq('user_id', userId)
+      .single();
+
+    if (error || !data) return null;
+    return data.fcm_token;
+  } catch (error) {
+    console.error('Error in getFcmTokenFromNativeDevices:', error);
     return null;
   }
 }

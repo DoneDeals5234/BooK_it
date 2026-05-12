@@ -1,12 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const ONESIGNAL_NATIVE_APP_ID =
-  Deno.env.get("ONESIGNAL_NATIVE_APP_ID") ||
-  "71048c28-503e-49e5-89b1-0de00ccdca4b";
-const ONESIGNAL_NATIVE_API_KEY =
-  "os_v2_app_oeciykcqhze6lcnrbxqaztokjnzez2oi76me4sv3y3p6gy5eu4kvf5qxzpuuraw25tybywnd3vg443ug2ln3os34jkyqd42llsnfjty";
-
-const ONESIGNAL_API_URL = "https://onesignal.com/api/v1/notifications";
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "https://database.donedeals.shop";
+const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
 function corsHeaders() {
   return {
@@ -32,60 +28,61 @@ serve(async (req: Request) => {
       );
     }
 
-    const payload: Record<string, unknown> = {
-      app_id: ONESIGNAL_NATIVE_APP_ID,
-      headings: { en: title },
-      contents: { en: messageBody },
-      included_segments: ["All"],
-      android_importance: 5,
-      android_priority: 10,
-      android_small_icon: "scissors",
-      ios_badged: true,
-      ios_sound: "default",
-    };
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-    if (image) {
-      payload.big_picture = image;
-      payload.large_icon = image;
+    // Fetch ALL native device tokens
+    console.log("🔍 Fetching all native device tokens for broadcast...");
+    const { data: devices, error: fetchError } = await supabase
+      .from("native_devices")
+      .select("fcm_token")
+      .not("fcm_token", "is", null);
+
+    if (fetchError) {
+      throw fetchError;
     }
 
-    if (data) {
-      payload.data = data;
-    }
+    const tokens = [...new Set(devices.map(d => d.fcm_token))];
+    console.log(`📊 Found ${tokens.length} unique tokens for broadcast.`);
 
-    console.log("📡 Sending BROADCAST payload to OneSignal:", JSON.stringify(payload, null, 2));
-
-    const response = await fetch(ONESIGNAL_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json; charset=utf-8",
-        Authorization: `Key ${ONESIGNAL_API_KEY}`,
-      },
-      body: JSON.stringify(payload),
-    });
-
-    const responseText = await response.text();
-
-    if (!response.ok) {
-      console.error("❌ OneSignal API Error:", responseText);
+    if (tokens.length === 0) {
       return new Response(
-        JSON.stringify({ error: "Failed to send broadcast", details: responseText }),
-        { status: response.status, headers: { "Content-Type": "application/json", ...corsHeaders() } }
+        JSON.stringify({ success: true, message: "No devices found for broadcast" }),
+        { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders() } }
       );
     }
 
+    // TRIGGER FCM BROADCAST via send-native-notification internal logic
+    // We'll call send-notification for each token (or batch them)
+    // For simplicity, we'll call the send-notification function
+    
+    const notifyUrl = `${SUPABASE_URL}/functions/v1/send-notification`;
+    const resp = await fetch(notifyUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${SUPABASE_SERVICE_KEY}`,
+      },
+      body: JSON.stringify({
+        tokens: tokens,
+        title: title,
+        messageBody: messageBody,
+        data: data || {},
+        image: image
+      }),
+    });
+
+    const respData = await resp.json();
+    console.log("✅ Broadcast sent via FCM:", respData);
+
     return new Response(
-      JSON.stringify({ success: true, message: "Broadcast sent successfully" }),
+      JSON.stringify({ success: true, message: "Broadcast sent successfully via FCM", details: respData }),
       { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders() } }
     );
   } catch (error) {
     console.error("❌ Error:", error);
     return new Response(
-      JSON.stringify({ error: "Internal server error" }),
+      JSON.stringify({ error: "Internal server error", details: String(error) }),
       { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders() } }
     );
   }
 });
-
-
-

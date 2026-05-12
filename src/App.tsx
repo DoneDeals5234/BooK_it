@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-ro
 import { PublishedWebsite } from '@/components/PublishedWebsite';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { UserProfileProvider, useUserProfile } from '@/contexts/UserProfileContext';
-import { OneSignalProvider, useOneSignal } from '@/contexts/OneSignalContext';
+import { NotificationProvider, useNotification } from '@/contexts/NotificationContext';
 import { ReminderAlarmProvider, useReminderAlarm } from '@/contexts/ReminderAlarmContext';
 import { AppUpdateProvider } from '@/contexts/AppUpdateContext';
 import { LoginPopup } from '@/components/LoginPopup';
@@ -13,6 +13,7 @@ import { SplashScreen } from '@/components/SplashScreen';
 import { HamburgerMenu } from '@/components/HamburgerMenu';
 import HomePage from '@/components/HomePage';
 import { ShopDetailsPage } from '@/components/ShopDetailsPage';
+import CheckoutPage from '@/components/CheckoutPage';
 
 // Lazy load heavy components
 import { StaffPortal } from '@/components/StaffPortal';
@@ -36,7 +37,6 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ReminderToast } from '@/components/ReminderToast';
 import { useAuth } from '@/contexts/AuthContext';
 import { initializeShops } from '@/lib/shops-storage';
-import { setupReminderNotificationHandler, notifyShopOwnersCustomerConfirmed } from '@/lib/onesignal-messaging';
 import { deleteBookingFromSupabase } from '@/lib/supabase-bookings';
 import { deleteReminder } from '@/lib/local-reminders';
 import type { LocalReminder } from '@/lib/local-reminders';
@@ -60,14 +60,14 @@ function AppContentInner() {
 
   const { user, userRole, roleLoading } = useAuth();
   const { profile } = useUserProfile();
-  const { isInitializing } = useOneSignal();
+  const { isInitializing } = useNotification();
   const { activeReminder, setActiveReminder } = useReminderAlarm();
 
   // Initialize device back button handler
   useDeviceBackButton({
     onBackPressed: () => {
-      console.log('🔙 App-level back navigation');
-      navigate(-1);
+      console.log('🔙 App-level back navigation to Home');
+      navigate('/', { replace: true });
     },
     onExitAttempt: () => {
       setShowExitDialog(true);
@@ -96,11 +96,81 @@ function AppContentInner() {
   useEffect(() => {
     const handleNotificationClick = (event: any) => {
       console.log('🔔 App-level notification click handler:', event.detail);
-      const data = event.detail?.notification?.data;
+      
+      // Support both Capacitor format (event.detail.notification.data) and direct data
+      const notifData = event.detail?.notification?.data || event.detail?.data || event.detail || {};
+      const type = notifData?.type;
 
-      if (data && data.type === 'offer' && data.shopId) {
-        console.log('🚀 Deep linking to shop offers:', data.shopId);
-        navigate(`/shop/${data.shopId}`);
+      console.log('📱 Notification type:', type, 'data:', notifData);
+
+      switch (type) {
+        // Order-related
+        case 'order_placed':
+        case 'order_update':
+        case 'order_action':
+          navigate('/orders');
+          break;
+
+        // New order for shop owner → go to portal / dashboard
+        case 'new_order':
+          navigate('/portal');
+          break;
+
+        // Video like or comment → go to videos page
+        case 'video_like':
+        case 'video_comment':
+          navigate('/videos');
+          break;
+
+        // Global chat message
+        case 'broadcast':
+          // If it came from global chat, go there
+          if (notifData?.route === '/chat') {
+            navigate('/chat');
+          } else if (notifData?.route === '/bazaar') {
+            navigate('/bazaar');
+          } else if (notifData?.route && notifData.route !== '/') {
+            navigate(notifData.route);
+          } else {
+            navigate('/');
+          }
+          break;
+
+        // New shop offer
+        case 'new_offer':
+          if (notifData?.shop_id) {
+            navigate(`/shop/${notifData.shop_id}`);
+          } else if (notifData?.route) {
+            navigate(notifData.route);
+          } else {
+            navigate('/bazaar');
+          }
+          break;
+
+        // Campaign notification
+        case 'campaign':
+          if (notifData?.shop_id) {
+            navigate(`/shop/${notifData.shop_id}`);
+          } else {
+            navigate('/');
+          }
+          break;
+
+        // Legacy offer type
+        case 'offer':
+          if (notifData?.shopId) {
+            navigate(`/shop/${notifData.shopId}`);
+          } else {
+            navigate('/bazaar');
+          }
+          break;
+
+        default:
+          // If notification has an explicit route, use it
+          if (notifData?.route && notifData.route !== '/') {
+            navigate(notifData.route);
+          }
+          break;
       }
     };
 
@@ -162,13 +232,11 @@ function AppContentInner() {
         console.error('❌ Critical error during app initialization');
       }
 
-      // Setup reminder notification handler with alarm callback
+      // Alarms and reminders are now handled natively or via FCM
       try {
-        setupReminderNotificationHandler((reminder: LocalReminder) => {
-          setActiveReminder(reminder);
-        });
+        console.log('🔔 Notification system initialized');
       } catch (error) {
-        console.error('Error setting up reminder notification handler:', error);
+        console.error('Error initializing notification system:', error);
       }
 
       // Initialize Capacitor Local Notifications for device alarms
@@ -236,7 +304,21 @@ function AppContentInner() {
         await cancelAlarm(reminder.bookingId);
       } else {
         await cancelAlarm(reminder.bookingId);
-        await notifyShopOwnersCustomerConfirmed(reminder.shopId, reminder.tokenNumber, reminder.userName, reminder.timeSlot, reminder.shopName, '');
+        try {
+          const { sendNativeNotification } = await import('@/lib/native-notifications');
+          const { supabase } = await import('@/lib/supabase');
+          const { data: owners } = await supabase.from('shop_owners').select('user_id').eq('shop_id', reminder.shopId);
+          if (owners && owners.length > 0) {
+            const ownerIds = owners.map((o: any) => o.user_id).filter(Boolean);
+            await sendNativeNotification(ownerIds, {
+              title: '✅ Customer Confirmed!',
+              body: `Token #${reminder.tokenNumber} - ${reminder.userName} confirmed for ${reminder.timeSlot}.`,
+              data: { type: 'booking_confirmed', shop_id: reminder.shopId, route: '/portal' }
+            });
+          }
+        } catch (e) {
+          console.warn('Could not notify shop owner of customer confirmation:', e);
+        }
       }
       deleteReminder(reminder.id);
       setActiveReminder(null);
@@ -302,11 +384,7 @@ function AppContentInner() {
             <>
               <HamburgerMenu
                 onStaffAccess={() => navigate('/staff')}
-                onBarberPortal={(tab) => navigate(`/portal${tab ? `?tab=${tab}` : ''}`)}
                 onShowLogin={() => setShowLoginPopup(true)}
-                onShowProfile={(tab) => navigate(`/profile${tab ? `?tab=${tab}` : ''}`)}
-                onCategorySelect={(cat) => navigate(`/category/${cat.id}`)}
-                onShowInbox={() => navigate('/profile?tab=inbox')}
               />
               <HomePage
                 onShopSelect={(id) => navigate(`/shop/${id}`)}
@@ -328,7 +406,7 @@ function AppContentInner() {
 
           <Route path="/profile" element={
             <ProfilePage
-              onClose={() => navigate(-1)}
+              onClose={() => navigate('/', { replace: true })}
               onShopSelect={(shopId) => navigate(`/shop/${shopId}`)}
               initialTab={(new URLSearchParams(location.search).get('tab') as any) || 'today'}
               openInbox={location.search.includes('tab=inbox') ? 1 : 0}
@@ -337,14 +415,14 @@ function AppContentInner() {
 
           <Route path="/profile/:userId" element={
             <ProfilePage
-              onClose={() => navigate(-1)}
+              onClose={() => navigate('/', { replace: true })}
               onShopSelect={(shopId) => navigate(`/shop/${shopId}`)}
               targetUserId={location.pathname.split('/').pop()}
             />
           } />
 
-          <Route path="/videos" element={<ShortVideosPage onClose={() => navigate('/')} />} />
-          <Route path="/chat" element={<WorldChatPage onClose={() => navigate('/')} onShowLogin={() => setShowLoginPopup(true)} />} />
+          <Route path="/videos" element={<ShortVideosPage onClose={() => navigate('/', { replace: true })} />} />
+          <Route path="/chat" element={<WorldChatPage onClose={() => navigate('/', { replace: true })} onShowLogin={() => setShowLoginPopup(true)} />} />
 
           <Route path="/shop/:shopId" element={
             <ShopDetailsPage
@@ -370,7 +448,8 @@ function AppContentInner() {
           <Route path="/product/:productId" element={<ProductDetailsPage />} />
           <Route path="/offers-list" element={<OffersListPage />} />
           <Route path="/cart" element={<CartPage />} />
-          <Route path="/bazar" element={<BazarTab onShowLogin={() => setShowLoginPopup(true)} />} />
+          <Route path="/bazar" element={<HomePage onShowLogin={() => setShowLoginPopup(true)} initialTab="bazar" />} />
+          <Route path="/checkout/:productId" element={<CheckoutPage />} />
           <Route path="/upload-video" element={<UploadVideoPage />} />
         </Routes>
       </Suspense>
@@ -382,7 +461,7 @@ function App() {
   return (
     <ErrorBoundary>
       <BrowserRouter>
-        <OneSignalProvider>
+        <NotificationProvider>
           <AuthProvider>
             <UserProfileProvider>
               <ReminderAlarmProvider>
@@ -392,7 +471,7 @@ function App() {
               </ReminderAlarmProvider>
             </UserProfileProvider>
           </AuthProvider>
-        </OneSignalProvider>
+        </NotificationProvider>
       </BrowserRouter>
     </ErrorBoundary>
   );

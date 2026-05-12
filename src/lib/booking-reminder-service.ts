@@ -1,6 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import { sendNotificationToPlayerIds } from '@/lib/onesignal-messaging';
-import { getPlayerIdFromNativeDevices } from '@/lib/supabase-native-devices';
+import { sendNativeNotification } from '@/lib/native-notifications';
 
 export interface PendingReminder {
   id: string;
@@ -15,40 +14,25 @@ export interface PendingReminder {
 
 /**
  * Check for pending reminders that need to be triggered
- * Should be called periodically (e.g., every minute)
  */
 export const checkPendingReminders = async (): Promise<PendingReminder[]> => {
   try {
     const now = new Date();
     const currentTime = now.toISOString();
-
-    // Fetch bookings with reminders that should trigger soon (within 2 minutes window)
     const twoMinutesAgo = new Date(now.getTime() - 2 * 60000).toISOString();
 
     const { data: bookings, error } = await supabase
       .from('bookings')
       .select('id, shop_id, service_name, user_id, reminder_time, reminder_triggered_at')
       .eq('reminder_enabled', true)
-      .is('customer_confirmed', null) // Not yet confirmed
-      .is('reminder_triggered_at', null) // Not yet triggered
+      .is('customer_confirmed', null)
+      .is('reminder_triggered_at', null)
       .gte('reminder_time', twoMinutesAgo)
       .lte('reminder_time', currentTime);
 
-    if (error) {
-      console.error('Error fetching pending reminders:', {
-        code: error.code,
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-      });
-      return [];
-    }
+    if (error) return [];
+    if (!bookings || bookings.length === 0) return [];
 
-    if (!bookings || bookings.length === 0) {
-      return [];
-    }
-
-    // Get shop details for each booking
     const reminders = await Promise.all(
       bookings.map(async (booking) => {
         const { data: shop } = await supabase
@@ -72,18 +56,12 @@ export const checkPendingReminders = async (): Promise<PendingReminder[]> => {
 
     return reminders;
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error('Error checking pending reminders:', {
-      message: errorMessage,
-      stack: error instanceof Error ? error.stack : undefined,
-    });
     return [];
   }
 };
 
 /**
- * Trigger a reminder for a specific booking
- * This updates the booking to mark reminder as triggered
+ * Trigger a reminder
  */
 export const triggerReminder = async (bookingId: string): Promise<boolean> => {
   try {
@@ -94,19 +72,8 @@ export const triggerReminder = async (bookingId: string): Promise<boolean> => {
       })
       .eq('id', bookingId);
 
-    if (error) {
-      console.error('Error triggering reminder:', error);
-      return false;
-    }
-
-    console.log('✅ Reminder triggered for booking:', bookingId);
-    return true;
+    return !error;
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error('Error triggering reminder:', {
-      message: errorMessage,
-      stack: error instanceof Error ? error.stack : undefined,
-    });
     return false;
   }
 };
@@ -121,7 +88,6 @@ export const handleCustomerConfirmation = async (
   serviceName: string
 ): Promise<boolean> => {
   try {
-    // Update booking status
     const { error: updateError } = await supabase
       .from('bookings')
       .update({
@@ -129,44 +95,27 @@ export const handleCustomerConfirmation = async (
       })
       .eq('id', bookingId);
 
-    if (updateError) {
-      console.error('Error updating booking:', updateError);
-      return false;
-    }
+    if (updateError) return false;
 
-    // Send notification to shop owner
-    try {
-      const playerId = await getPlayerIdFromNativeDevices(shopOwnerId);
-      if (playerId) {
-        await sendNotificationToPlayerIds(
-          [playerId],
-          {
-            headings: { en: '📞 Customer Confirmed!' },
-            contents: {
-              en: `${customerName} confirmed they are coming for ${serviceName}`,
-            },
-          }
-        );
+    // Send notification to shop owner via FCM
+    await sendNativeNotification([shopOwnerId], {
+      title: '📞 Customer Confirmed!',
+      body: `${customerName} confirmed they are coming for ${serviceName}`,
+      data: {
+        type: 'customer_confirmation',
+        bookingId,
+        customerName
       }
-    } catch (notificationError) {
-      console.warn('Could not send notification to owner:', notificationError);
-      // Don't fail the whole operation if notification fails
-    }
+    });
 
-    console.log('✅ Customer confirmation recorded for booking:', bookingId);
     return true;
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error('Error handling customer confirmation:', {
-      message: errorMessage,
-      stack: error instanceof Error ? error.stack : undefined,
-    });
     return false;
   }
 };
 
 /**
- * Handle customer cancellation - silently cancel the booking
+ * Handle customer cancellation
  */
 export const handleCustomerCancellation = async (
   bookingId: string
@@ -180,31 +129,18 @@ export const handleCustomerCancellation = async (
       })
       .eq('id', bookingId);
 
-    if (error) {
-      console.error('Error cancelling booking:', error);
-      return false;
-    }
-
-    console.log('✅ Booking cancelled: ', bookingId);
-    return true;
+    return !error;
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error('Error cancelling booking:', {
-      message: errorMessage,
-      stack: error instanceof Error ? error.stack : undefined,
-    });
     return false;
   }
 };
 
 /**
- * Start monitoring for reminders in the background
- * This should be called when the app initializes
+ * Start monitoring for reminders
  */
 export const startReminderMonitoring = (
   onReminderReady: (reminder: PendingReminder) => void
 ) => {
-  // Check for pending reminders every 30 seconds
   const intervalId = setInterval(async () => {
     try {
       const pendingReminders = await checkPendingReminders();
@@ -212,16 +148,9 @@ export const startReminderMonitoring = (
         onReminderReady(reminder);
         triggerReminder(reminder.bookingId);
       });
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('Error in reminder monitoring:', {
-        message: errorMessage,
-        stack: error instanceof Error ? error.stack : undefined,
-      });
-    }
-  }, 30000); // Check every 30 seconds
+    } catch (error) {}
+  }, 30000);
 
-  // Return function to stop monitoring
   return () => clearInterval(intervalId);
 };
 
@@ -238,24 +167,14 @@ export const getCustomerBookings = async (
       .eq('user_id', userId)
       .order('booking_date', { ascending: false });
 
-    if (error) {
-      console.error('Error fetching customer bookings:', error);
-      return [];
-    }
-
     return data || [];
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error('Error getting customer bookings:', {
-      message: errorMessage,
-      stack: error instanceof Error ? error.stack : undefined,
-    });
     return [];
   }
 };
 
 /**
- * Cancel a booking (for customers)
+ * Cancel a booking
  */
 export const cancelCustomerBooking = async (bookingId: string): Promise<boolean> => {
   try {
@@ -266,19 +185,8 @@ export const cancelCustomerBooking = async (bookingId: string): Promise<boolean>
       })
       .eq('id', bookingId);
 
-    if (error) {
-      console.error('Error cancelling booking:', error);
-      return false;
-    }
-
-    console.log('✅ Booking cancelled by customer:', bookingId);
-    return true;
+    return !error;
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error('Error cancelling booking:', {
-      message: errorMessage,
-      stack: error instanceof Error ? error.stack : undefined,
-    });
     return false;
   }
 };

@@ -54,50 +54,5 @@ export interface ShopOffer {
   updatedAt: Date;
 }
 
-// OneSignal types for window object
-declare global {
-  interface Window {
-    OneSignal?: {
-      init: (options: OneSignalInitOptions) => Promise<void>;
-      Slidedown?: {
-        promptPush?: () => Promise<void> | void;
-      };
-      User: {
-        getId?: () => Promise<string | null>;
-        pushSubscription?: {
-          getPushSubscriptionId?: () => Promise<string | null>;
-        };
-        PushSubscription?: {
-          id?: string | null;
-          optIn?: () => Promise<void>;
-          optOut?: () => Promise<void>;
-        };
-      };
-      Notifications?: {
-        addEventListener?: (event: string, callback: (event: any) => void) => void;
-        requestPermission?: (value: boolean) => Promise<boolean>;
-      };
-      getIds?: (callback: (ids: any) => void) => void;
-      getDeviceState?: (callback: (state: any) => void) => void;
-      getUserId?: (callback: (id: string) => void) => void;
-      requestPermission?: (value: boolean, callback: () => void) => void;
-      enablePush?: (value: boolean, callback: () => void) => void;
-    };
-    OneSignalInitialized?: boolean;
-  }
-}
 
-interface OneSignalInitOptions {
-  appId: string;
-  notificationClickHandlerMatch?: string;
-  notificationBehavior?: {
-    desktop?: {
-      icon?: string;
-      badge?: string;
-    };
-    web?: {
-      icon?: string;
-      badge?: string;
-    };
-  };
-}
+

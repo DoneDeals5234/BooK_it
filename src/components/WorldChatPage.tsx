@@ -18,6 +18,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { sendWorldChatNotification } from '@/lib/chat-notification-system';
 import toast from 'react-hot-toast';
+import { useDeviceBackButton } from '@/lib/use-device-back-button';
 
 interface WorldChatPageProps {
   onClose: () => void;
@@ -43,6 +44,14 @@ export default function WorldChatPage({ onClose, onShowLogin }: WorldChatPagePro
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+
+  // Handle device back button
+  useDeviceBackButton({
+    onBackPressed: () => {
+      onClose();
+    },
+    priority: 20 // High priority
+  });
 
   // Load messages on mount and setup realtime subscription
   useEffect(() => {
@@ -237,17 +246,35 @@ export default function WorldChatPage({ onClose, onShowLogin }: WorldChatPagePro
       if (newMessage) {
         // Message sent successfully, clear UI immediately
         const sentMessage = message.trim();
+        const sentImageUrl = imageUrl;
+        
+        // OPTIMISTIC UPDATE: Add the message to local state immediately so it's visible to the user
+        // We handle potential duplicates in the realtime listener, so this is safe.
+        setMessages((prev) => {
+          if (prev.some(m => m.id === newMessage.id)) return prev;
+          
+          // Ensure we have basic profile info for the local update if needed
+          const msgWithProfile = {
+            ...newMessage,
+            profiles: {
+              image_url: profile?.imageUrl || null
+            }
+          };
+          return [msgWithProfile as WorldChatMessage, ...prev];
+        });
+
         setMessage('');
         removeImage();
         setReplyTo(null);
         setSubmitting(false);
 
         // 2. Send notification in the background (Independent of UI)
-        // We don't await this, and we don't care if it fails
+        // Now including the imageUrl as requested
         sendWorldChatNotification({
           senderName: profile?.name || user.email?.split('@')[0] || 'User',
           message: sentMessage,
           senderEmail: user.email || undefined,
+          imageUrl: sentImageUrl,
         }).catch(err => {
           console.warn("Background notification failed (expected for some users):", err);
         });

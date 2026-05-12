@@ -1,5 +1,4 @@
 import { supabase } from './supabase';
-import { saveCampaignAlert } from './supabase-campaign-alerts';
 
 interface CampaignTarget {
   country: string;
@@ -16,23 +15,15 @@ interface Campaign {
   shop_id?: string;
 }
 
-const ONESIGNAL_NATIVE_APP_ID =
-  import.meta.env.VITE_ONESIGNAL_NATIVE_APP_ID ||
-  "71048c28-503e-49e5-89b1-0de00ccdca4b";
-
-const ONESIGNAL_API_KEY =
-  import.meta.env.VITE_ONESIGNAL_NATIVE_API_KEY ||
-  "os_v2_app_oeciykcqhze6lcnrbxqaztokjnzez2oi76me4sv3y3p6gy5eu4kvf5qxzpuuraw25tybywnd3vg443ug2ln3os34jkyqd42llsnfjty";
-
 /**
  * Sends a campaign via the send-realtime-campaign Edge Function
- * This triggers both instant Realtime broadcast and OneSignal backup
+ * This triggers both instant Realtime broadcast and FCM backup
  */
 export async function sendCampaignDirectly(
   campaign: Campaign,
   target: CampaignTarget
 ): Promise<{ success: boolean; matchedCount: number; sentCount: number }> {
-  console.log('🚀 Starting hybrid campaign send (Realtime + OneSignal)...');
+  console.log('🚀 Starting hybrid campaign send (Realtime + FCM Native)...');
 
   try {
     // 1. Call the Edge Function
@@ -50,7 +41,7 @@ export async function sendCampaignDirectly(
 
     console.log('✅ Campaign triggered successfully:', data);
 
-    // 2. Query matched users for logging (optional, could be moved to server)
+    // 2. Query matched users for logging
     const { data: matchedUsers } = await supabase
       .from('user_profiles')
       .select('user_id')
@@ -75,4 +66,3 @@ export async function sendCampaignDirectly(
     throw error;
   }
 }
-

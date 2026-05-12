@@ -21,11 +21,16 @@ export const db = getFirestore(app);
 // Initialize Firebase Messaging (safely handle unsupported environments like Capacitor)
 export const messaging = (async () => {
   try {
-    const supported = await isSupported();
+    // Add a timeout to isSupported() as it can hang in some environments
+    const isSupportedPromise = isSupported();
+    const timeoutPromise = new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 5000));
+    
+    const supported = await Promise.race([isSupportedPromise, timeoutPromise]);
+    
     if (supported) {
       return getMessaging(app);
     }
-    console.log('ℹ️ Firebase Messaging not supported in this environment (native/Capacitor)');
+    console.log('ℹ️ Firebase Messaging not supported or timed out in this environment');
     return null;
   } catch (error) {
     console.warn('⚠️ Error initializing Firebase Messaging:', error instanceof Error ? error.message : 'Unknown error');

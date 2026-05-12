@@ -28,6 +28,7 @@ import { getAllCategories } from '@/lib/supabase-categories';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { cacheShops, cacheCategories, getCachedShops, getCachedCategories, invalidateAllCaches } from '@/lib/shops-cache';
+import { useDeviceBackButton } from '@/lib/use-device-back-button';
 
 // Alias for consistency
 const getCategories = getAllCategories;
@@ -36,21 +37,53 @@ export type TabType = 'explore' | 'find' | 'bazar' | 'videos' | 'offers';
 
 interface HomePageProps {
   onShowLogin: () => void;
+  initialTab?: TabType;
 }
 
-export default function HomePage({ onShowLogin }: HomePageProps) {
+const CATEGORY_IMAGES: Record<string, string> = {
+  'salon': 'https://images.unsplash.com/photo-1560066984-138dadb4c035?w=200\u0026h=200\u0026fit=crop',
+  'parlour': 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=200\u0026h=200\u0026fit=crop',
+  'restaurant': 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=200\u0026h=200\u0026fit=crop',
+  'shoes': 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=200\u0026h=200\u0026fit=crop',
+  'clothes': 'https://images.unsplash.com/photo-1489987707025-afc232f7ea0f?w=200\u0026h=200\u0026fit=crop',
+  'cosmetics': 'https://images.unsplash.com/photo-1522338242992-e1a54906a8da?w=200\u0026h=200\u0026fit=crop',
+  'groceries': 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=200\u0026h=200\u0026fit=crop',
+  'chemist': 'https://images.unsplash.com/photo-1587854692152-cbe660dbbb88?w=200\u0026h=200\u0026fit=crop',
+  'hardware': 'https://images.unsplash.com/photo-1530124566582-aa37dd159a76?w=200\u0026h=200\u0026fit=crop',
+  'electrical': 'https://images.unsplash.com/photo-1558444479-285176291c0d?w=200\u0026h=200\u0026fit=crop',
+  'food cart': 'https://images.unsplash.com/photo-1565123409695-7b5ef63a2efb?w=200\u0026h=200\u0026fit=crop',
+  'bakery': 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=200\u0026h=200\u0026fit=crop',
+  'barber': 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=200\u0026h=200\u0026fit=crop',
+  'clinic': 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=200\u0026h=200\u0026fit=crop',
+  'hospital': 'https://images.unsplash.com/photo-1586773860418-d3b9a8ec817e?w=200\u0026h=200\u0026fit=crop',
+  'dentist': 'https://images.unsplash.com/photo-1606811841689-23dfddce3e95?w=200\u0026h=200\u0026fit=crop',
+};
+
+export default function HomePage({ onShowLogin, initialTab = 'explore' }: HomePageProps) {
   const navigate = useNavigate();
-  const [shops, setShops] = useState<Shop[]>([]);
+  const [shops, setShops] = useState<Shop[]>(() => {
+    const cachedShops = getCachedShops();
+    return cachedShops && cachedShops.length > 0 ? getOrderedShops(cachedShops) : [];
+  });
   const [bookings, setBookings] = useState<Booking[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [categories, setCategories] = useState<Category[]>(() => {
+    return getCachedCategories() || [];
+  });
+  const [loading, setLoading] = useState(() => {
+    const cachedShops = getCachedShops();
+    return !(cachedShops && cachedShops.length > 0);
+  });
   const [searchQuery, setSearchQuery] = useState('');
-  const [currentTab, setCurrentTab] = useState<TabType>('explore');
+  const [currentTab, setCurrentTab] = useState<TabType>(initialTab);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [favoriteRefresh, setFavoriteRefresh] = useState(0);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [bazarProducts, setBazarProducts] = useState<any[]>([]);
+  const [allOffers, setAllOffers] = useState<any[]>([]);
+  const [isBazarLoading, setIsBazarLoading] = useState(false);
+  const [isOffersLoading, setIsOffersLoading] = useState(false);
   const [isCatSearching, setIsCatSearching] = useState(false);
   const [pullDistance, setPullDistance] = useState(0);
   const [swipeX, setSwipeX] = useState(0);
@@ -75,6 +108,18 @@ export default function HomePage({ onShowLogin }: HomePageProps) {
         });
     }
   }, [currentUser]);
+
+  // Handle back button for tab navigation
+  useDeviceBackButton({
+    onBackPressed: () => {
+      if (currentTab !== 'explore') {
+        setCurrentTab('explore');
+        return true; // Consumed
+      }
+      return false; // Let it bubble to App.tsx for exit dialog
+    },
+    priority: 10 // Higher than app-level
+  });
 
   // Tab navigation order for swipe
   const tabOrder: TabType[] = ['explore', 'find', 'bazar', 'videos', 'offers'];
@@ -136,6 +181,12 @@ export default function HomePage({ onShowLogin }: HomePageProps) {
     };
 
     loadInitialData();
+
+    // Background fetch for Bazar and Offers if not already loaded
+    if (currentTab === 'bazar' && bazarProducts.length === 0) {
+      // Lazy fetch when user enters Bazar
+      // But we could also pre-fetch
+    }
 
     const subscription = supabase
       .channel('bookings-channel')
@@ -265,11 +316,15 @@ export default function HomePage({ onShowLogin }: HomePageProps) {
   // Handle tab changes and location prompt
   useEffect(() => {
     if (currentTab === 'videos') {
-      navigate('/videos');
+      navigate('/videos', { replace: true });
     } else if (currentTab === 'find') {
-      navigate('/chat');
+      navigate('/chat', { replace: true });
+    } else if (currentTab === 'bazar') {
+      navigate('/bazar', { replace: true });
+    } else if (currentTab === 'explore') {
+      navigate('/', { replace: true });
     }
-  }, [currentTab, profile?.latitude, profile?.longitude, searchQuery, shops.length, navigate]);
+  }, [currentTab, navigate]);
 
   // Handle category change loading effect
   useEffect(() => {
@@ -414,21 +469,7 @@ export default function HomePage({ onShowLogin }: HomePageProps) {
     return null;
   }
 
-  // If bazar tab is selected, navigate to /bazar route for proper back button
-  if (currentTab === 'bazar') {
-    navigate('/bazar');
-    setCurrentTab('explore');
-    return null;
-  }
-
-  // If offers tab is selected, render OffersTab
-  if (currentTab === 'offers') {
-    return (
-      <div className="relative min-h-screen bg-white dark:bg-slate-950">
-        <OffersTab onShopClick={(shopId) => navigate(`/shop/${shopId}`)} />
-      </div>
-    );
-  }
+  // Navigation is now handled inline in the main return for state persistence
 
   return (
     <div className="relative h-screen bg-white dark:bg-slate-950 flex flex-col overflow-hidden">
@@ -475,124 +516,120 @@ export default function HomePage({ onShowLogin }: HomePageProps) {
           className="relative z-10 container mx-auto px-3 sm:px-4 py-4 sm:py-8 pt-16 sm:pt-20 max-w-2xl flex-1 overflow-y-auto overflow-x-hidden pb-32 no-scrollbar"
           style={{ marginTop: isOnline ? 0 : 40 }}
         >
-          {/* New Premium Banner Section */}
-          <div className="relative -mx-3 sm:-mx-4 -mt-6 sm:-mt-10 mb-8 rounded-b-[40px] overflow-hidden shadow-2xl h-[220px] sm:h-[300px]">
-            <img
-              src="/banner-bg.png"
-              className="absolute inset-0 w-full h-full object-cover"
-              alt="Banner Background"
-              loading="lazy"
-              decoding="async"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
+          {currentTab === 'explore' && (
+            <>
+              {/* Premium Banner Section */}
+              <div className="relative -mx-3 sm:-mx-4 -mt-6 sm:-mt-10 mb-8 rounded-b-[40px] overflow-hidden shadow-2xl h-[220px] sm:h-[300px]">
+                <img
+                  src="/banner-bg.png"
+                  className="absolute inset-0 w-full h-full object-cover"
+                  alt="Banner Background"
+                  loading="lazy"
+                  decoding="async"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
 
-            <div className="relative h-full flex flex-col px-4 sm:px-6 py-6 sm:py-8 justify-end">
-              {/* Search Input - Overlaid on Banner */}
-              <div className="relative group max-w-xl w-full mx-auto mb-2">
-                <div className="absolute inset-0 bg-red-500/10 rounded-full blur-xl opacity-0 group-focus-within:opacity-100 transition-opacity"></div>
-                <div className="relative">
-                  <Search className="absolute left-5 top-1/2 transform -translate-y-1/2 h-5 w-5 text-red-500" />
-                  <input
-                    type="text"
-                    placeholder="Search products, brands..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-14 pr-6 py-4 sm:py-5 text-sm sm:text-base rounded-full border-none bg-white shadow-2xl shadow-black/10 focus:ring-4 focus:ring-red-500/10 transition-all font-bold placeholder:text-slate-400 text-slate-900"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Shop Categories Section */}
-          <div className="mb-8">
-            <div className="flex items-center justify-between mb-6 px-1">
-              <h2 className="text-lg font-black text-slate-900 dark:text-white tracking-tight">Shop Categories</h2>
-              <button className="flex items-center gap-1 text-[10px] font-black text-red-500 uppercase tracking-widest hover:translate-x-1 transition-transform">
-                See All <ArrowRight className="h-3 w-3" />
-              </button>
-            </div>
-            <div className="flex gap-4 sm:gap-6 overflow-x-auto no-scrollbar pb-2 snap-x snap-mandatory">
-              {/* "ALL" Category Button */}
-              <button
-                onClick={() => setSelectedCategoryId(null)}
-                className="flex flex-col items-center gap-2 group snap-start shrink-0"
-              >
-                <div className={`h-10 w-10 sm:h-12 sm:w-12 rounded-full flex items-center justify-center transition-all duration-300 relative ${!selectedCategoryId
-                  ? 'bg-red-500 text-white shadow-lg shadow-red-500/20 scale-105'
-                  : 'bg-white dark:bg-slate-800 text-red-500 border border-slate-100 dark:border-slate-700 shadow-md shadow-black/5 hover:shadow-lg hover:-translate-y-0.5'
-                  }`}>
-                  {!selectedCategoryId && (
-                    <div className="absolute inset-[-2px] rounded-full border border-red-500/30 scale-110"></div>
-                  )}
-                  <div className="transition-transform group-hover:scale-110">
-                    <HomeIcon className="h-4 w-4 sm:h-5 sm:h-5" />
+                <div className="relative h-full flex flex-col px-4 sm:px-6 py-6 sm:py-8 justify-end">
+                  {/* Search Input - Overlaid on Banner */}
+                  <div className="relative group max-w-xl w-full mx-auto mb-2">
+                    <div className="absolute inset-0 bg-red-500/10 rounded-full blur-xl opacity-0 group-focus-within:opacity-100 transition-opacity"></div>
+                    <div className="relative">
+                      <Search className="absolute left-5 top-1/2 transform -translate-y-1/2 h-5 w-5 text-red-500" />
+                      <input
+                        type="text"
+                        placeholder="Search products, brands..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full pl-14 pr-6 py-4 sm:py-5 text-sm sm:text-base rounded-full border-none bg-white shadow-2xl shadow-black/10 focus:ring-4 focus:ring-red-500/10 transition-all font-bold placeholder:text-slate-400 text-slate-900"
+                      />
+                    </div>
                   </div>
                 </div>
-                <span className={`text-[9px] font-black uppercase tracking-widest transition-colors ${!selectedCategoryId ? 'text-red-500' : 'text-slate-500 group-hover:text-slate-700'}`}>
-                  ALL
-                </span>
-              </button>
+              </div>
 
-              {categories.map((category) => {
-                const getCategoryIcon = (name: string) => {
-                  const lowerName = name.toLowerCase();
-                  if (lowerName.includes('saloon') || lowerName.includes('salon')) return <Scissors className="h-4 w-4 sm:h-5 sm:h-5" />;
-                  if (lowerName.includes('parlour') || lowerName.includes('beauty')) return <Sparkles className="h-4 w-4 sm:h-5 sm:h-5" />;
-                  if (lowerName.includes('restraunt') || lowerName.includes('restaurant') || lowerName.includes('food')) return <Utensils className="h-4 w-4 sm:h-5 sm:h-5" />;
-                  if (lowerName.includes('shoes') || lowerName.includes('footwear')) return <Footprints className="h-4 w-4 sm:h-5 sm:h-5" />;
-                  if (lowerName.includes('clothes') || lowerName.includes('garments')) return <Shirt className="h-4 w-4 sm:h-5 sm:h-5" />;
-                  if (lowerName.includes('cosmetic') || lowerName.includes('makeup')) return <Palette className="h-4 w-4 sm:h-5 sm:h-5" />;
-                  if (lowerName.includes('grocer')) return <ShoppingBasket className="h-4 w-4 sm:h-5 sm:h-5" />;
-                  return <Store className="h-4 w-4 sm:h-5 sm:h-5" />;
-                };
-
-                const isActive = selectedCategoryId === category.id;
-
-                return (
+              {/* Shop Categories Section */}
+              <div className="mb-8">
+                <div className="flex items-center justify-between mb-6 px-1">
+                  <h2 className="text-lg font-black text-slate-900 dark:text-white tracking-tight">Shop Categories</h2>
+                  <button className="flex items-center gap-1 text-[10px] font-black text-red-500 uppercase tracking-widest hover:translate-x-1 transition-transform">
+                    See All <ArrowRight className="h-3 w-3" />
+                  </button>
+                </div>
+                <div className="flex gap-4 sm:gap-6 overflow-x-auto no-scrollbar pb-2 snap-x snap-mandatory">
+                  {/* "ALL" Category Button */}
                   <button
-                    key={category.id}
-                    onClick={() => {
-                      setSelectedCategoryId(category.id);
-                      // Removed navigate to keep user on Home Page as requested
-                    }}
+                    onClick={() => setSelectedCategoryId(null)}
                     className="flex flex-col items-center gap-2 group snap-start shrink-0"
                   >
-                    <div className={`h-10 w-10 sm:h-12 sm:w-12 rounded-full flex items-center justify-center transition-all duration-300 relative ${isActive
-                      ? 'bg-red-500 text-white shadow-lg shadow-red-500/20 scale-105'
-                      : 'bg-white dark:bg-slate-800 text-red-500 border border-slate-100 dark:border-slate-700 shadow-md shadow-black/5 hover:shadow-lg hover:-translate-y-0.5'
+                    <div className={`h-12 w-12 sm:h-14 sm:w-14 rounded-2xl overflow-hidden flex items-center justify-center transition-all duration-300 relative ${!selectedCategoryId
+                      ? 'ring-2 ring-red-500 ring-offset-2 scale-105 shadow-lg'
+                      : 'border border-slate-100 dark:border-slate-700 shadow-md shadow-black/5 hover:shadow-lg hover:-translate-y-0.5'
                       }`}>
-                      {isActive && (
-                        <div className="absolute inset-[-2px] rounded-full border border-red-500/30 scale-110"></div>
-                      )}
-                      <div className="transition-transform group-hover:scale-110">
-                        {getCategoryIcon(category.name)}
-                      </div>
+                      <img 
+                        src="https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=200&h=200&fit=crop" 
+                        alt="All" 
+                        className="w-full h-full object-cover"
+                      />
                     </div>
-                    <span className={`text-[9px] font-black uppercase tracking-widest transition-colors ${isActive ? 'text-red-500' : 'text-slate-500 group-hover:text-slate-700'}`}>
-                      {category.name}
-                    </span>
+                    <span className={`text-[9px] font-black uppercase tracking-widest ${!selectedCategoryId ? 'text-red-500' : 'text-slate-500'}`}>ALL</span>
                   </button>
-                );
-              })}
-            </div>
-          </div>
+                  {categories.map((category) => {
+                    const categoryLower = category.name.toLowerCase();
+                    const imageUrl = CATEGORY_IMAGES[categoryLower] || category.icon || 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=200&h=200&fit=crop';
+                    
+                    return (
+                      <button key={category.id} onClick={() => setSelectedCategoryId(category.id)} className="flex flex-col items-center gap-2 group snap-start shrink-0">
+                        <div className={`h-12 w-12 sm:h-14 sm:w-14 rounded-2xl overflow-hidden flex items-center justify-center transition-all duration-300 relative ${selectedCategoryId === category.id ? 'ring-2 ring-red-500 ring-offset-2 scale-105 shadow-lg' : 'border border-slate-100 dark:border-slate-700 shadow-md shadow-black/5 hover:shadow-lg hover:-translate-y-0.5'}`}>
+                          <img 
+                            src={imageUrl} 
+                            alt={category.name} 
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=200&h=200&fit=crop';
+                            }}
+                          />
+                        </div>
+                        <span className={`text-[9px] font-black uppercase tracking-widest ${selectedCategoryId === category.id ? 'text-red-500' : 'text-slate-500'}`}>{category.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
 
-          {/* Promotional Banner */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-8 p-6 bg-gradient-to-r from-red-800 to-red-600 rounded-3xl shadow-xl shadow-red-500/20 relative overflow-hidden group cursor-pointer"
-          >
-            <div className="relative z-10">
-              <p className="text-red-100 text-[10px] font-bold uppercase tracking-[0.2em] mb-1">Exclusive Offers</p>
-              <h3 className="text-white text-xl font-black mb-1">Up to 40% OFF</h3>
-              <p className="text-white/80 text-xs mb-4">Selected Premium Items</p>
-              <button className="bg-white text-red-600 px-4 py-1.5 rounded-full text-xs font-black shadow-lg hover:bg-red-50 transition-colors">Shop Now</button>
-            </div>
-            <div className="absolute right-[-20px] top-[-20px] w-40 h-40 bg-white/10 rounded-full blur-2xl group-hover:scale-125 transition-transform duration-700"></div>
-            <Star className="absolute right-6 top-1/2 -translate-y-1/2 h-20 w-20 text-white/10 rotate-12" />
-          </motion.div>
+              {/* Promotional Banner */}
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8 p-6 bg-gradient-to-r from-red-800 to-red-600 rounded-3xl shadow-xl relative overflow-hidden group cursor-pointer">
+                <div className="relative z-10">
+                  <p className="text-red-100 text-[10px] font-bold uppercase tracking-[0.2em] mb-1">Exclusive Offers</p>
+                  <h3 className="text-white text-xl font-black mb-1">Up to 40% OFF</h3>
+                  <p className="text-white/80 text-xs mb-4">Selected Premium Items</p>
+                  <button className="bg-white text-red-600 px-4 py-1.5 rounded-full text-xs font-black">Shop Now</button>
+                </div>
+                <Star className="absolute right-6 top-1/2 -translate-y-1/2 h-20 w-20 text-white/10 rotate-12" />
+              </motion.div>
+
+              {/* Results List moved to global handler below to avoid duplication */}
+            </>
+          )}
+
+          {currentTab === 'bazar' && (
+            <BazarTab 
+              onShowLogin={onShowLogin}
+              initialProducts={bazarProducts}
+              onProductsLoaded={setBazarProducts}
+            />
+          )}
+
+          {currentTab === 'offers' && (
+            <OffersTab 
+              onShopClick={(shopId) => navigate(`/shop/${shopId}`)}
+              initialOffers={allOffers}
+              onOffersLoaded={setAllOffers}
+            />
+          )}
+
+          {currentTab === 'videos' && (
+             <div className="flex items-center justify-center h-40">Videos coming soon...</div>
+          )}
 
 
           {!isOnline ? (

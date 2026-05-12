@@ -1,7 +1,7 @@
 /**
  * Local reminder storage and scheduler
  * Stores reminders locally and checks periodically if they should be sent
- * This is a fallback mechanism when OneSignal scheduling fails on native devices
+ * This is a fallback mechanism when FCM scheduling fails on native devices
  */
 
 export interface LocalReminder {

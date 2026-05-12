@@ -274,7 +274,7 @@ const OrderCard = ({ order, onTrack, onComplete, onCancel, onGoToShop, shop, onP
         {/* Header: Status & ID */}
         <div className={`px-4 py-2 flex items-center justify-between ${getStatusColor(order.status)}`}>
           <span className="text-[10px] font-black uppercase tracking-widest opacity-80">
-            ID: {order.order_code || '------'}
+            ID: {order.order_code || order.otp_code || '------'}
           </span>
           <span className="text-[10px] font-black uppercase tracking-widest flex items-center gap-1">
             {order.status === 'accepted' || order.status === 'ready_for_collection' ? (

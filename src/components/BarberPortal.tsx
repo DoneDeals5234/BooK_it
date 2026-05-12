@@ -23,6 +23,11 @@ import {
   LogOut,
   Globe,
   HelpCircle,
+  LayoutDashboard,
+  Clock,
+  ShoppingBag,
+  Tag,
+  BookOpen,
   Upload,
   Camera,
   Trash2,
@@ -45,7 +50,8 @@ import {
   Package,
   Eraser,
   Sparkles,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Calendar
 } from 'lucide-react';
 // import removeBackground from '@imgly/background-removal'; (Using dynamic import instead)
 import { getShops, updateShop, getShopById } from '@/lib/shops-storage';
@@ -81,7 +87,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 
 interface BarberPortalProps {
   onClose: () => void;
-  initialTab?: 'dashboard' | 'bookings' | 'settings' | 'campaigns' | 'customization' | 'uploads' | 'preview' | 'website' | 'khata-book' | 'orders' | 'campaign-analytics';
+  initialTab?: 'dashboard' | 'bookings' | 'settings' | 'campaigns' | 'customization' | 'uploads' | 'preview' | 'website' | 'khata-book' | 'orders' | 'campaign-analytics' | 'products' | 'offers';
 }
 
 export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortalProps) => {
@@ -173,7 +179,7 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
             const percentage = Math.round((current / total) * 100);
             setAiProgress(percentage);
             if (percentage % 10 === 0) { // Update toast less frequently to reduce UI lag
-               toast.loading(`Downloading AI model: ${percentage}%...`, { id: toastId });
+              toast.loading(`Downloading AI model: ${percentage}%...`, { id: toastId });
             }
           }
         }
@@ -200,7 +206,7 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
       }
 
       const resultBlob = await removeBg(blob, config as any);
-      
+
       // Convert to DataURL and potentially sharpen
       const resultDataUrl = await new Promise<string>((resolve) => {
         const reader = new FileReader();
@@ -230,46 +236,46 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
         const ctx = canvas.getContext('2d')!;
         canvas.width = img.width;
         canvas.height = img.height;
-        
+
         // Draw original
         ctx.drawImage(img, 0, 0);
-        
+
         // Apply enhancement filters for "Crystal Clear" look
         // We do this by drawing the canvas onto itself with filters
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = canvas.width;
         tempCanvas.height = canvas.height;
         const tempCtx = tempCanvas.getContext('2d')!;
-        
+
         tempCtx.filter = 'contrast(1.15) brightness(1.05) saturate(1.1) sharpness(1.2)'; // Sharpness is experimental, so we use convolution too
         tempCtx.drawImage(canvas, 0, 0);
-        
+
         // Use better image smoothing
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(tempCanvas, 0, 0);
-        
+
         // Real convolution for sharpening
         try {
           const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
           const data = imageData.data;
           const width = canvas.width;
           const height = canvas.height;
-          
+
           // Sharpening kernel (Laplacian)
           const weights = [0, -0.5, 0, -0.5, 3, -0.5, 0, -0.5, 0];
           const side = 3;
           const halfSide = 1;
-          
+
           const output = ctx.createImageData(width, height);
           const outputData = output.data;
-          
+
           for (let y = 0; y < height; y++) {
             for (let x = 0; x < width; x++) {
               const dstOff = (y * width + x) * 4;
               let r = 0, g = 0, b = 0;
-              
+
               for (let cy = 0; cy < side; cy++) {
                 for (let cx = 0; cx < side; cx++) {
                   const scy = y + cy - halfSide;
@@ -294,7 +300,7 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
           console.warn('Enhancement failed, returning filtered original:', e);
           ctx.drawImage(tempCanvas, 0, 0);
         }
-        
+
         resolve(canvas.toDataURL('image/png', 0.98));
       };
       img.src = dataUrl;
@@ -316,7 +322,7 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
       const imageUrl = `https://image.pollinations.ai/prompt/${prompt}?width=1024&height=1024&nologo=true&seed=${seed}`;
 
       setAiProgress(30);
-      
+
       // Load via Image element to bypass fetch-handler interceptor (avoids CORS/network errors)
       return new Promise<string | null>((resolve) => {
         const img = new Image();
@@ -340,7 +346,7 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
             canvas.height = img.naturalHeight || 1024;
             const ctx = canvas.getContext('2d')!;
             ctx.drawImage(img, 0, 0);
-            
+
             setAiProgress(100);
             setTimeout(() => {
               setIsGeneratingAIImage(false);
@@ -611,7 +617,19 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
       try {
         const bookingsData = await getShopBookingsFromSupabase(selectedShop.id);
         setBookings(bookingsData);
-        setFormData(selectedShop);
+        // Auto-fill location from localStorage if shop doesn't have one saved
+        const shopDataWithLocation = { ...selectedShop };
+        if (!shopDataWithLocation.location && !shopDataWithLocation.address) {
+          try {
+            const savedLocation = localStorage.getItem('last_shop_location');
+            if (savedLocation) {
+              const loc = JSON.parse(savedLocation);
+              Object.assign(shopDataWithLocation, loc);
+            }
+          } catch { }
+        }
+        setFormData(shopDataWithLocation);
+
         setStep('portal');
         setPassword('');
       } catch (error) {
@@ -1101,7 +1119,7 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
     setGettingLocation(true);
     try {
       const location = await fetchUserLocation();
-      setFormData({
+      const updatedData = {
         ...formData,
         location: location.formattedAddress,
         latitude: location.latitude,
@@ -1111,7 +1129,21 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
         district: location.district || null,
         state: location.state || null,
         country: location.country || null,
-      });
+      };
+      setFormData(updatedData);
+
+      // Persist to local storage
+      localStorage.setItem('last_shop_location', JSON.stringify({
+        location: location.formattedAddress,
+        latitude: location.latitude,
+        longitude: location.longitude,
+        address: location.formattedAddress,
+        village: location.village || null,
+        district: location.district || null,
+        state: location.state || null,
+        country: location.country || null,
+      }));
+
       toast.success('Location captured successfully!');
     } catch (error) {
       console.error('Error getting location:', error);
@@ -1365,19 +1397,21 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
             </div>
           </div>
 
-          {/* Tab Navigation - Modern Scrolling Tabs */}
-          <div className="flex overflow-x-auto gap-2 pb-2 no-scrollbar -mx-4 px-4">
+          {/* Tab Navigation - Scaled Desktop Style for Mobile */}
+          <div className="flex flex-nowrap items-center gap-1 sm:gap-2 pb-2 no-scrollbar overflow-x-auto">
             {[
-              { id: 'dashboard', label: 'Dashboard', icon: <Eye className="h-4 w-4" /> },
-              { id: 'bookings', label: 'Requests', icon: <Bell className="h-4 w-4" /> },
-              { id: 'orders', label: 'Orders', icon: <ShoppingCart className="h-4 w-4" /> },
-              { id: 'settings', label: 'Settings', icon: <Settings className="h-4 w-4" /> },
-              { id: 'campaigns', label: 'Campaigns', icon: <Megaphone className="h-4 w-4" />, restricted: isTabRestricted('campaigns') },
-              { id: 'customization', label: 'Design', icon: <Palette className="h-4 w-4" />, restricted: isTabRestricted('customization') },
-              { id: 'uploads', label: 'Uploads', icon: <Upload className="h-4 w-4" />, restricted: isTabRestricted('uploads') },
-              { id: 'preview', label: 'Preview', icon: <Eye className="h-4 w-4" />, restricted: isTabRestricted('preview') },
-              { id: 'website', label: 'Website', icon: <GlobeIcon className="h-4 w-4" />, restricted: isTabRestricted('website') },
-              { id: 'khata-book', label: 'Khata', icon: <Book className="h-4 w-4" />, restricted: isTabRestricted('khata-book') },
+              { id: 'dashboard', label: 'Dashboard', icon: <Eye className="h-3 w-3 sm:h-4 sm:w-4" /> },
+              { id: 'bookings', label: 'Requests', icon: <Bell className="h-3 w-3 sm:h-4 sm:w-4" /> },
+              { id: 'orders', label: 'Orders', icon: <ShoppingCart className="h-3 w-3 sm:h-4 sm:w-4" /> },
+              { id: 'products', label: 'Products', icon: <Package className="h-3 w-3 sm:h-4 sm:w-4" /> },
+              { id: 'offers', label: 'Offers', icon: <Zap className="h-3 w-3 sm:h-4 sm:w-4" /> },
+              { id: 'settings', label: 'Settings', icon: <Settings className="h-3 w-3 sm:h-4 sm:w-4" /> },
+              { id: 'campaigns', label: 'Campaigns', icon: <Megaphone className="h-3 w-3 sm:h-4 sm:w-4" />, restricted: isTabRestricted('campaigns') },
+              { id: 'customization', label: 'Design', icon: <Palette className="h-3 w-3 sm:h-4 sm:w-4" />, restricted: isTabRestricted('customization') },
+              { id: 'uploads', label: 'Uploads', icon: <Upload className="h-3 w-3 sm:h-4 sm:w-4" />, restricted: isTabRestricted('uploads') },
+              { id: 'preview', label: 'Preview', icon: <Eye className="h-3 w-3 sm:h-4 sm:w-4" />, restricted: isTabRestricted('preview') },
+              { id: 'website', label: 'Website', icon: <GlobeIcon className="h-3 w-3 sm:h-4 sm:w-4" />, restricted: isTabRestricted('website') },
+              { id: 'khata-book', label: 'Khata', icon: <Book className="h-3 w-3 sm:h-4 sm:w-4" />, restricted: isTabRestricted('khata-book') },
             ].map((tab) => {
               const isActive = currentTab === tab.id;
               return (
@@ -1392,16 +1426,16 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
                     handleTabChange(tab.id as any);
                     if (tab.id === 'campaigns') setCampaignView('list');
                   }}
-                  className={`flex items-center gap-2 h-10 px-4 rounded-xl shrink-0 transition-all ${isActive
-                      ? 'bg-slate-900 text-white shadow-md'
-                      : 'text-slate-600 hover:bg-slate-100'
+                  className={`flex items-center gap-1 sm:gap-2 h-7 sm:h-10 px-2 sm:px-4 rounded-lg shrink-0 transition-all ${isActive
+                    ? 'bg-slate-900 text-white shadow-sm'
+                    : 'text-slate-600 hover:bg-slate-100'
                     } ${tab.restricted ? 'opacity-50' : ''}`}
                 >
                   <div className="relative">
                     {tab.icon}
                     {tab.restricted && <Lock className="absolute -top-1 -right-1 h-2 w-2 text-red-500" />}
                   </div>
-                  <span className="text-xs font-bold whitespace-nowrap">{tab.label}</span>
+                  <span className="text-[8px] sm:text-xs font-bold whitespace-nowrap">{tab.label}</span>
                 </Button>
               );
             })}
@@ -1421,32 +1455,31 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
             >
               {currentTab === 'dashboard' && (
                 <>
-                  {/* Shop Header Section */}
-                  <div className="mb-6 rounded-lg overflow-hidden bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 border border-blue-200 dark:border-blue-900">
-                    <div className="p-6 sm:p-8">
-                      <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
+                  <div className="mb-4 rounded-lg overflow-hidden bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 border border-blue-200 dark:border-blue-900">
+                    <div className="p-3 sm:p-8">
+                      <div className="flex flex-row items-start gap-3 sm:gap-6">
                         {/* Shop Image */}
                         {selectedShop?.shopImageUrl && (
                           <div className="flex-shrink-0">
                             <img
                               src={selectedShop.shopImageUrl}
                               alt={selectedShop.name}
-                              className="w-32 h-32 sm:w-40 sm:h-40 object-cover rounded-lg shadow-lg"
+                              className="w-16 h-16 sm:w-40 sm:h-40 object-cover rounded-lg shadow-md"
                             />
                           </div>
                         )}
 
                         {/* Shop Info */}
-                        <div className="flex-1 text-center sm:text-left">
+                        <div className="flex-1 text-left min-w-0">
                           {/* Shop Name */}
-                          <h1 className="text-3xl sm:text-5xl font-bold text-gray-900 dark:text-white mb-2">
+                          <h1 className="text-sm sm:text-5xl font-black text-gray-900 dark:text-white truncate">
                             {selectedShop?.name}
                           </h1>
 
                           {/* Category Badge */}
                           {selectedShop?.category && (
-                            <div className="flex justify-center sm:justify-start gap-3 mb-4">
-                              <span className="inline-block px-4 py-2 bg-blue-600 text-white rounded-full text-sm font-semibold capitalize shadow-md">
+                            <div className="flex justify-start gap-1 mt-1 mb-2">
+                              <span className="inline-block px-2 py-0.5 bg-blue-600 text-white rounded-full text-[8px] sm:text-sm font-bold capitalize shadow-sm">
                                 {selectedShop.category}
                               </span>
                             </div>
@@ -1454,7 +1487,7 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
 
                           {/* Additional Info */}
                           {selectedShop?.about && (
-                            <p className="text-gray-600 dark:text-gray-300 mt-3 max-w-2xl">
+                            <p className="text-gray-600 dark:text-gray-300 text-[8px] sm:text-base leading-tight line-clamp-2 max-w-2xl">
                               {selectedShop.about}
                             </p>
                           )}
@@ -1463,88 +1496,73 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
-                    <Card className={selectedShop?.isOpen ? 'border-green-200 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20' : 'border-red-200 bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-950/20 dark:to-rose-950/20'}>
-                      <CardHeader className="pb-3 sm:pb-4">
-                        <CardTitle className="text-base sm:text-lg">
+                  {/* Side-by-Side Scaled Cards (PC Format on Mobile) */}
+                  <div className="grid grid-cols-2 gap-2 sm:gap-4">
+                    <Card className={`shadow-none border-0 overflow-hidden ${selectedShop?.isOpen ? 'bg-green-50/50' : 'bg-red-50/50'}`}>
+                      <CardHeader className="p-2 pb-1">
+                        <CardTitle className="text-[10px] font-black uppercase tracking-tighter flex items-center gap-1">
                           {selectedShop?.isOpen ? '🟢 Open' : '🔴 Closed'}
                         </CardTitle>
                       </CardHeader>
-                      <CardContent className="space-y-3 sm:space-y-4">
-                        <div className="flex items-center justify-between p-4 bg-white/50 dark:bg-black/20 rounded-lg border-2 border-dashed" style={{ borderColor: selectedShop?.isOpen ? '#16a34a' : '#dc2626' }}>
-                          <div>
-                            <p className="font-semibold text-base">Shop Status</p>
-                            <p className={`font-bold text-lg ${selectedShop?.isOpen ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
-                              {selectedShop?.isOpen ? '✅ OPEN' : '❌ CLOSED'}
+                      <CardContent className="p-2 pt-0 space-y-1.5">
+                        <div className="flex flex-col gap-0.5">
+                          <p className="text-[9px] font-bold text-slate-400 uppercase">Status</p>
+                          <div className="flex items-center justify-between gap-1">
+                            <p className={`font-black text-xs ${selectedShop?.isOpen ? 'text-green-600' : 'text-red-600'}`}>
+                              {selectedShop?.isOpen ? 'OPEN' : 'CLOSED'}
                             </p>
+                            <Button
+                              variant={selectedShop?.isOpen ? 'destructive' : 'default'}
+                              className="h-6 px-1.5 text-[8px] font-bold rounded-md"
+                              onClick={handleToggleShopOpen}
+                            >
+                              {selectedShop?.isOpen ? 'Close' : 'Open'}
+                            </Button>
                           </div>
-                          <Button
-                            variant={selectedShop?.isOpen ? 'destructive' : 'default'}
-                            size="sm"
-                            onClick={handleToggleShopOpen}
-                            className="min-w-fit"
-                          >
-                            {selectedShop?.isOpen ? '🔴 Close Shop' : '🟢 Open Shop'}
-                          </Button>
                         </div>
 
-                        <div className="flex items-center justify-between p-3 bg-muted rounded mt-4">
-                          <div>
-                            <p className="font-medium">Booking Token Facility</p>
-                            <p className="text-xs text-muted-foreground">
-                              {selectedShop?.isTokenBookingEnabled !== false ? '✅ Enabled' : '❌ Disabled'}
-                            </p>
-                          </div>
+                        <div className="flex items-center justify-between p-1.5 bg-white/50 rounded-lg">
+                          <span className="font-bold text-[8px] uppercase">Token Facility</span>
                           <Switch
+                            className="scale-75"
                             checked={selectedShop?.isTokenBookingEnabled !== false}
                             onCheckedChange={handleToggleTokenBookingFacility}
                           />
                         </div>
 
-                        <div className="flex items-center justify-between p-3 bg-muted rounded mt-4">
-                          <div>
-                            <p className="font-medium">Token Booking</p>
-                            <p className={selectedShop?.tokenBookingPaused ? 'text-orange-600 text-sm' : 'text-green-600 text-sm'}>
-                              {selectedShop?.tokenBookingPaused ? '⏸️ Paused' : '▶️ Active'}
-                            </p>
+                        <div className="flex items-center justify-between p-1.5 bg-white/50 rounded-lg">
+                          <div className="flex flex-col">
+                            <span className="font-bold text-[8px] uppercase">Booking</span>
+                            <span className={`text-[8px] font-bold ${selectedShop?.tokenBookingPaused ? 'text-orange-600' : 'text-green-600'}`}>
+                              {selectedShop?.tokenBookingPaused ? 'Paused' : 'Active'}
+                            </span>
                           </div>
-                          <Button
-                            variant={selectedShop?.tokenBookingPaused ? 'default' : 'outline'}
-                            size="sm"
+                          <button
                             onClick={handleToggleTokenBooking}
+                            className={`p-1 rounded-md ${selectedShop?.tokenBookingPaused ? 'bg-orange-600 text-white' : 'bg-slate-200 text-slate-600'}`}
                           >
-                            {selectedShop?.tokenBookingPaused ? (
-                              <>
-                                <Play className="mr-2 h-3 w-3" />
-                                Resume
-                              </>
-                            ) : (
-                              <>
-                                <Pause className="mr-2 h-3 w-3" />
-                                Pause
-                              </>
-                            )}
-                          </Button>
+                            {selectedShop?.tokenBookingPaused ? <Play className="h-2.5 w-2.5" /> : <Pause className="h-2.5 w-2.5" />}
+                          </button>
                         </div>
                       </CardContent>
                     </Card>
 
-                    <Card>
-                      <CardHeader className="pb-3 sm:pb-4">
-                        <CardTitle className="text-base sm:text-lg">Quick Stats</CardTitle>
+                    <Card className="shadow-none border-0 bg-slate-50/50">
+                      <CardHeader className="p-2 pb-1">
+                        <CardTitle className="text-[10px] font-black uppercase tracking-tighter text-slate-400">Quick Stats</CardTitle>
                       </CardHeader>
-                      <CardContent className="space-y-2 sm:space-y-3">
-                        <div className="flex items-center justify-between p-2 sm:p-3 bg-muted rounded">
-                          <span className="font-medium text-sm sm:text-base">Total Bookings</span>
-                          <span className="text-xl sm:text-2xl font-bold">{bookings.length}</span>
+                      <CardContent className="p-2 pt-0 space-y-1.5">
+                        <div className="flex items-center justify-between p-1.5 bg-white rounded-lg">
+                          <span className="font-bold text-[9px] text-slate-500">Total</span>
+                          <span className="text-xs font-black text-indigo-600">{bookings.length}</span>
                         </div>
-                        <div className="flex items-center justify-between p-2 sm:p-3 bg-muted rounded">
-                          <span className="font-medium text-sm sm:text-base">Pending</span>
-                          <span className="text-xl sm:text-2xl font-bold">{bookings.filter((b) => b.status === 'pending').length}</span>
+                        <div className="flex items-center justify-between p-1.5 bg-white rounded-lg">
+                          <span className="font-bold text-[9px] text-slate-500">Pending</span>
+                          <span className="text-xs font-black text-orange-600">{bookings.filter((b) => b.status === 'pending').length}</span>
                         </div>
-                        <div className="flex items-center justify-between p-2 sm:p-3 bg-muted rounded">
-                          <span className="font-medium text-sm sm:text-base">In Progress</span>
-                          <span className="text-xl sm:text-2xl font-bold">{bookings.filter((b) => b.status === 'in-progress').length}</span>
+                        <div className="flex items-center justify-between p-1.5 bg-white rounded-lg">
+                          <span className="font-bold text-[9px] text-slate-500">Active</span>
+                          <span className="text-xs font-black text-blue-600">{bookings.filter((b) => b.status === 'in-progress').length}</span>
                         </div>
                       </CardContent>
                     </Card>
@@ -1579,78 +1597,64 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
                     </CardContent>
                   </Card>
 
-                  <Card>
-                    <CardHeader className="pb-3 sm:pb-4">
-                      <CardTitle className="text-base sm:text-xl">Bookings</CardTitle>
-                      <CardDescription className="text-xs">Customer booking details</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      {bookings.length === 0 ? (
-                        <p className="text-muted-foreground text-center py-8">No bookings yet</p>
-                      ) : (
-                        <div className="space-y-2 sm:space-y-3">
-                          {bookings.map((booking) => (
-                            <div key={booking.id} className="border rounded-lg p-2 sm:p-4 space-y-2 sm:space-y-3">
-                              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-2">
-                                    <h3 className="font-semibold text-sm sm:text-lg truncate">{booking.userName}</h3>
-                                    <span
-                                      className={`px-2 py-1 rounded text-xs font-medium w-fit ${booking.status === 'pending'
-                                        ? 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100'
-                                        : booking.status === 'in-progress'
-                                          ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100'
-                                          : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100'
-                                        }`}
-                                    >
-                                      {booking.status === 'pending' && '⏳ Pending'}
-                                      {booking.status === 'in-progress' && '🔴 In Progress'}
-                                      {booking.status === 'completed' && '✅ Completed'}
-                                    </span>
-                                  </div>
-                                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 text-xs sm:text-sm text-muted-foreground">
-                                    <div>
-                                      <p className="font-medium text-foreground">Service</p>
-                                      <p className="truncate">{booking.serviceName}</p>
-                                    </div>
-                                    <div>
-                                      <p className="font-medium text-foreground">Time</p>
-                                      <p>{booking.timeSlot}</p>
-                                    </div>
-                                    <div>
-                                      <p className="font-medium text-foreground">Token Number</p>
-                                      <p className="text-lg font-bold text-primary">#{booking.tokenNumber}</p>
-                                    </div>
-                                    <div>
-                                      <p className="font-medium text-foreground">Price</p>
-                                      <p>{booking.servicePrice}</p>
-                                    </div>
-                                    <div>
-                                      <p className="font-medium text-foreground">Date</p>
-                                      <p>{formatIST(booking.bookingDate, false)}</p>
-                                    </div>
-                                    <div>
-                                      <p className="font-medium text-foreground">Phone</p>
-                                      <p className="truncate">{booking.userPhone}</p>
-                                    </div>
-                                  </div>
-                                </div>
-                                <Button
-                                  onClick={() => handleCall(booking.userPhone)}
-                                  size="sm"
-                                  className="sm:ml-4 w-full sm:w-auto mt-2 sm:mt-0 text-xs sm:text-sm h-8 sm:h-9"
-                                >
-                                  <Phone className="mr-1 h-3 w-3 sm:h-4 sm:w-4" />
-                                  <span className="hidden sm:inline">Call</span>
-                                  <span className="sm:hidden">📱</span>
-                                </Button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
+                  {/* Premium Quick Access Tools Dashboard */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between px-2">
+                      <div>
+                        <h3 className="text-base sm:text-lg font-black text-slate-800 dark:text-white flex items-center gap-2">
+                          <div className="bg-indigo-600 p-1.5 rounded-lg shadow-lg shadow-indigo-200">
+                            <LayoutDashboard className="h-4 w-4 text-white" />
+                          </div>
+                          Quick Access Tools
+                        </h3>
+                        <p className="text-[10px] sm:text-xs text-slate-400 font-medium">Manage your shop operations from a central hub</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4 p-1">
+                      {[
+                        { id: 'bookings', label: 'Requests', sub: 'Manage bookings', icon: <Clock className="h-5 w-5" />, color: 'from-blue-500 to-indigo-600', glow: 'shadow-blue-200', bg: 'bg-blue-50/50' },
+                        { id: 'orders', label: 'Orders', sub: 'Track sales', icon: <ShoppingBag className="h-5 w-5" />, color: 'from-orange-400 to-red-500', glow: 'shadow-orange-200', bg: 'bg-orange-50/50' },
+                        { id: 'products', label: 'Products', sub: 'Manage inventory', icon: <Package className="h-5 w-5" />, color: 'from-emerald-400 to-teal-600', glow: 'shadow-emerald-200', bg: 'bg-emerald-50/50' },
+                        { id: 'offers', label: 'Offers', sub: 'Discount deals', icon: <Tag className="h-5 w-5" />, color: 'from-rose-400 to-pink-600', glow: 'shadow-rose-200', bg: 'bg-rose-50/50' },
+                        { id: 'campaigns', label: 'Campaigns', sub: 'Send alerts', icon: <Megaphone className="h-5 w-5" />, color: 'from-purple-500 to-fuchsia-600', glow: 'shadow-purple-200', bg: 'bg-purple-50/50' },
+                        { id: 'khata-book', label: 'Khata', sub: 'Ledger book', icon: <BookOpen className="h-5 w-5" />, color: 'from-indigo-500 to-blue-700', glow: 'shadow-indigo-200', bg: 'bg-indigo-50/50' },
+                        { id: 'website', label: 'Website', sub: 'Online store', icon: <Globe className="h-5 w-5" />, color: 'from-cyan-400 to-blue-500', glow: 'shadow-cyan-200', bg: 'bg-cyan-50/50' },
+                        { id: 'customization', label: 'Design', sub: 'Visual look', icon: <Palette className="h-5 w-5" />, color: 'from-pink-400 to-rose-500', glow: 'shadow-pink-200', bg: 'bg-pink-50/50' },
+                        { id: 'uploads', label: 'Uploads', sub: 'Gallery media', icon: <Upload className="h-5 w-5" />, color: 'from-slate-500 to-slate-700', glow: 'shadow-slate-200', bg: 'bg-slate-50/50' },
+                        { id: 'preview', label: 'Preview', sub: 'Customer view', icon: <Eye className="h-5 w-5" />, color: 'from-teal-400 to-emerald-500', glow: 'shadow-teal-200', bg: 'bg-teal-50/50' },
+                        { id: 'settings', label: 'Settings', sub: 'Portal config', icon: <Settings className="h-5 w-5" />, color: 'from-gray-500 to-slate-600', glow: 'shadow-gray-200', bg: 'bg-gray-50/50' },
+                      ].map((item) => (
+                        <button
+                          key={item.id}
+                          onClick={() => setCurrentTab(item.id as any)}
+                          className={`group relative flex flex-col items-center justify-center p-4 rounded-[24px] bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 transition-all duration-300 hover:z-10 hover:-translate-y-1 hover:shadow-2xl ${item.glow} active:scale-95 overflow-hidden h-32 sm:h-36`}
+                        >
+                          {/* Inner Shine Effect */}
+                          <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+
+                          {/* Circular Icon Bubble */}
+                          <div className={`mb-3 relative w-12 h-12 rounded-2xl bg-gradient-to-br ${item.color} flex items-center justify-center text-white shadow-lg group-hover:scale-110 group-hover:rotate-3 transition-transform duration-300`}>
+                            <div className="absolute inset-0 rounded-2xl bg-white/20 blur-[2px]" />
+                            <div className="relative z-10">{item.icon}</div>
+                          </div>
+
+                          {/* Label & Subtitle */}
+                          <div className="text-center">
+                            <span className="block text-xs sm:text-sm font-black text-slate-800 dark:text-slate-100 tracking-tight leading-none group-hover:text-indigo-600 transition-colors">
+                              {item.label}
+                            </span>
+                            <span className="block text-[9px] sm:text-[10px] font-medium text-slate-400 mt-1 line-clamp-1 leading-tight">
+                              {item.sub}
+                            </span>
+                          </div>
+
+                          {/* Border Glow on Hover */}
+                          <div className={`absolute inset-0 border-2 border-transparent group-hover:border-indigo-500/10 rounded-[24px] transition-colors pointer-events-none`} />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </>
               )}
 
@@ -1700,52 +1704,6 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
 
               {currentTab === 'settings' && (
                 <div className="space-y-4 sm:space-y-6 pb-6">
-                  {/* Booking Settings */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-lg sm:text-2xl">Booking Settings</CardTitle>
-                      <CardDescription>Configure how your booking system works</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg border">
-                        <div className="space-y-0.5">
-                          <Label className="text-base">Booking Token Facility</Label>
-                          <p className="text-sm text-muted-foreground">
-                            Enable or disable the entire booking system for your shop
-                          </p>
-                        </div>
-                        <Switch
-                          checked={formData.isTokenBookingEnabled !== false}
-                          onCheckedChange={(checked) => {
-                            const updated = { ...formData, isTokenBookingEnabled: checked };
-                            setFormData(updated);
-                            handleSaveSettings(updated);
-                          }}
-                        />
-                      </div>
-
-                      <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg border">
-                        <div className="space-y-0.5">
-                          <Label className="text-base">Pause Bookings</Label>
-                          <p className="text-sm text-muted-foreground">
-                            Temporarily stop taking new bookings (e.g., when you are busy)
-                          </p>
-                        </div>
-                        <Switch
-                          checked={formData.tokenBookingPaused || false}
-                          onCheckedChange={(checked) => {
-                            const updated = { ...formData, tokenBookingPaused: checked };
-                            setFormData(updated);
-                            handleSaveSettings(updated);
-                          }}
-                        />
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Printing Service Settings */}
-                  <PrintingSettingsPanel shopId={selectedShop.id} />
-
                   {/* Basic Information */}
                   <Card>
                     <CardHeader>
@@ -1856,8 +1814,16 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
                           />
                         </div>
                       </div>
+                    </CardContent>
+                  </Card>
 
-                      <div className="pt-4 border-t space-y-4">
+                  {/* Printing Service Settings */}
+                  <PrintingSettingsPanel shopId={selectedShop.id} />
+
+                  {/* Advance Payment Settings */}
+                  <Card>
+                    <CardContent className="pt-6">
+                      <div className="pt-0 space-y-4">
                         <h4 className="font-bold text-slate-800 flex items-center gap-2">
                           <CreditCard className="h-4 w-4" />
                           Advance Payment Settings
@@ -1918,7 +1884,7 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
                                   alt="Shop"
                                   className={`h-24 w-24 sm:h-40 sm:w-40 object-cover rounded border-2 border-primary transition-all duration-300 ${(isRemovingBackground || isGeneratingAIImage) ? 'blur-[2px] grayscale-[0.5]' : ''}`}
                                 />
-                                
+
                                 {/* Targeted Loading Overlay */}
                                 {(isRemovingBackground || isGeneratingAIImage) && (
                                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 rounded border-2 border-transparent backdrop-blur-[1px] z-10">
@@ -1986,47 +1952,47 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
                               </button>
                             )}
                           </div>
-                          
+
                           {/* AI Buttons for Shop Image */}
                           <div className="flex flex-col gap-2">
-                             <Button
-                               type="button"
-                               size="sm"
-                               variant="outline"
-                               className="h-8 sm:h-9 text-[10px] font-black uppercase border-purple-200 text-purple-600 hover:bg-purple-50"
-                               onClick={async () => {
-                                 const generated = await generateAIImage(formData.name || 'Shop', 'Store front');
-                                 if (generated) {
-                                   const updated = { ...formData, shopImageUrl: generated };
-                                   setFormData(updated);
-                                   handleSaveSettings(updated);
-                                 }
-                               }}
-                               disabled={isGeneratingAIImage || !formData.name}
-                             >
-                               <Sparkles className="mr-1 h-3 w-3" />
-                               AI Gen
-                             </Button>
-                             {formData.shopImageUrl && (
-                               <Button
-                                 type="button"
-                                 size="sm"
-                                 variant="outline"
-                                 className="h-8 sm:h-9 text-[10px] font-black uppercase border-red-200 text-red-600 hover:bg-red-50"
-                                 onClick={async () => {
-                                   const processed = await processRemoveBackground(formData.shopImageUrl!);
-                                   if (processed) {
-                                     const updated = { ...formData, shopImageUrl: processed };
-                                     setFormData(updated);
-                                     handleSaveSettings(updated);
-                                   }
-                                 }}
-                                 disabled={isRemovingBackground}
-                               >
-                                 <Eraser className="mr-1 h-3 w-3" />
-                                 No BG
-                               </Button>
-                             )}
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-8 sm:h-9 text-[10px] font-black uppercase border-purple-200 text-purple-600 hover:bg-purple-50"
+                              onClick={async () => {
+                                const generated = await generateAIImage(formData.name || 'Shop', 'Store front');
+                                if (generated) {
+                                  const updated = { ...formData, shopImageUrl: generated };
+                                  setFormData(updated);
+                                  handleSaveSettings(updated);
+                                }
+                              }}
+                              disabled={isGeneratingAIImage || !formData.name}
+                            >
+                              <Sparkles className="mr-1 h-3 w-3" />
+                              AI Gen
+                            </Button>
+                            {formData.shopImageUrl && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-8 sm:h-9 text-[10px] font-black uppercase border-red-200 text-red-600 hover:bg-red-50"
+                                onClick={async () => {
+                                  const processed = await processRemoveBackground(formData.shopImageUrl!);
+                                  if (processed) {
+                                    const updated = { ...formData, shopImageUrl: processed };
+                                    setFormData(updated);
+                                    handleSaveSettings(updated);
+                                  }
+                                }}
+                                disabled={isRemovingBackground}
+                              >
+                                <Eraser className="mr-1 h-3 w-3" />
+                                No BG
+                              </Button>
+                            )}
                           </div>
                         </div>
                         <input
@@ -2335,7 +2301,7 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
                                   alt={getCategoryName()}
                                   className={`h-24 w-24 rounded-full object-cover border-2 border-primary transition-all duration-300 ${(isRemovingBackground || isGeneratingAIImage) ? 'blur-[2px] grayscale-[0.5]' : ''}`}
                                 />
-                                
+
                                 {/* Targeted Loading Overlay */}
                                 {(isRemovingBackground || isGeneratingAIImage) && (
                                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 rounded-full backdrop-blur-[1px] z-10">
@@ -2377,39 +2343,39 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
                                 )}
                               </button>
                             )}
-                            
+
                             {/* AI Buttons for Staff */}
                             <div className="flex gap-2 mb-1">
-                               <Button
-                                 type="button"
-                                 size="sm"
-                                 variant="outline"
-                                 className="h-8 text-[10px] font-black uppercase border-purple-200 text-purple-600 hover:bg-purple-50"
-                                 onClick={async () => {
-                                   const generated = await generateAIImage(newBarber.name || 'Professional', 'Person portrait profile picture');
-                                   if (generated) setNewBarber({ ...newBarber, imageUrl: generated });
-                                 }}
-                                 disabled={isGeneratingAIImage || !newBarber.name}
-                               >
-                                 <Sparkles className="h-3 w-3 mr-1" />
-                                 AI
-                               </Button>
-                               {newBarber.imageUrl && (
-                                 <Button
-                                   type="button"
-                                   size="sm"
-                                   variant="outline"
-                                   className="h-8 text-[10px] font-black uppercase border-red-200 text-red-600 hover:bg-red-50"
-                                   onClick={async () => {
-                                     const processed = await processRemoveBackground(newBarber.imageUrl!);
-                                     if (processed) setNewBarber({ ...newBarber, imageUrl: processed });
-                                   }}
-                                   disabled={isRemovingBackground}
-                                 >
-                                   <Eraser className="h-3 w-3 mr-1" />
-                                   Clean
-                                 </Button>
-                               )}
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-8 text-[10px] font-black uppercase border-purple-200 text-purple-600 hover:bg-purple-50"
+                                onClick={async () => {
+                                  const generated = await generateAIImage(newBarber.name || 'Professional', 'Person portrait profile picture');
+                                  if (generated) setNewBarber({ ...newBarber, imageUrl: generated });
+                                }}
+                                disabled={isGeneratingAIImage || !newBarber.name}
+                              >
+                                <Sparkles className="h-3 w-3 mr-1" />
+                                AI
+                              </Button>
+                              {newBarber.imageUrl && (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 text-[10px] font-black uppercase border-red-200 text-red-600 hover:bg-red-50"
+                                  onClick={async () => {
+                                    const processed = await processRemoveBackground(newBarber.imageUrl!);
+                                    if (processed) setNewBarber({ ...newBarber, imageUrl: processed });
+                                  }}
+                                  disabled={isRemovingBackground}
+                                >
+                                  <Eraser className="h-3 w-3 mr-1" />
+                                  Clean
+                                </Button>
+                              )}
                             </div>
                           </div>
                           <input
@@ -2437,8 +2403,8 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
                   </Card>
 
 
-                  {/* Featured Products */}
-                  {selectedShop && (
+                  {/* Featured Products and Offers are now in their own dedicated tabs */}
+                  {false && selectedShop && (
                     <Card className={currentPlan?.plan_name === 'free' ? 'border-amber-200 bg-amber-50' : ''}>
                       <CardHeader>
                         <CardTitle className="text-lg sm:text-2xl flex items-center gap-2">
@@ -2545,80 +2511,80 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
                             </div>
                             <div className="space-y-2">
                               <Label className="text-xs sm:text-sm">Product Image</Label>
-                                {newFeaturedProduct.imageUrl ? (
-                                  <div className="relative inline-block group">
-                                    <img
-                                      src={newFeaturedProduct.imageUrl}
-                                      alt="Product"
-                                      className={`h-32 w-32 rounded-lg object-cover border-2 border-primary transition-all duration-300 ${(isRemovingBackground || isGeneratingAIImage) ? 'blur-[2px] grayscale-[0.5]' : ''}`}
-                                    />
-                                    
-                                    {/* Targeted Loading Overlay */}
-                                    {(isRemovingBackground || isGeneratingAIImage) && (
-                                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 rounded-lg backdrop-blur-[1px] z-10">
-                                        <div className="relative h-12 w-12">
-                                          <svg className="h-full w-full rotate-[-90deg]">
-                                            <circle
-                                              cx="24"
-                                              cy="24"
-                                              r="20"
-                                              stroke="currentColor"
-                                              strokeWidth="4"
-                                              fill="transparent"
-                                              className="text-white/20"
-                                            />
-                                            <circle
-                                              cx="24"
-                                              cy="24"
-                                              r="20"
-                                              stroke="currentColor"
-                                              strokeWidth="4"
-                                              fill="transparent"
-                                              strokeDasharray={125.6}
-                                              strokeDashoffset={125.6 - (125.6 * aiProgress) / 100}
-                                              className="text-primary transition-all duration-300"
-                                            />
-                                          </svg>
-                                          <div className="absolute inset-0 flex items-center justify-center">
-                                            <span className="text-[10px] font-black text-white">{aiProgress}%</span>
-                                          </div>
-                                        </div>
-                                        <span className="text-[8px] font-black uppercase tracking-tighter text-white mt-1 text-center px-1">
-                                          {isRemovingBackground ? 'Removing BG...' : 'AI Generating...'}
-                                        </span>
-                                      </div>
-                                    )}
+                              {newFeaturedProduct.imageUrl ? (
+                                <div className="relative inline-block group">
+                                  <img
+                                    src={newFeaturedProduct.imageUrl}
+                                    alt="Product"
+                                    className={`h-32 w-32 rounded-lg object-cover border-2 border-primary transition-all duration-300 ${(isRemovingBackground || isGeneratingAIImage) ? 'blur-[2px] grayscale-[0.5]' : ''}`}
+                                  />
 
-                                    {!isRemovingBackground && !isGeneratingAIImage && (
-                                      <button
-                                        type="button"
-                                        onClick={() => setUploadMenu({ isOpen: true, type: 'product' })}
-                                        className="absolute bottom-0 right-0 bg-primary text-primary-foreground p-1.5 rounded-full hover:bg-primary/90 transition-colors shadow-lg"
-                                      >
-                                        <Camera className="h-3 w-3" />
-                                      </button>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => setUploadMenu({ isOpen: true, type: 'product' })}
-                                    className="flex flex-col items-center justify-center w-32 h-32 border-2 border-dashed border-muted-foreground rounded-lg hover:border-primary transition-colors relative"
-                                    disabled={isGeneratingAIImage}
-                                  >
-                                    {isGeneratingAIImage ? (
-                                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-purple-50/50 rounded-lg">
-                                        <Loader2 className="h-6 w-6 text-purple-600 animate-spin" />
-                                        <span className="text-[10px] font-bold text-purple-700 mt-1">{aiProgress}%</span>
+                                  {/* Targeted Loading Overlay */}
+                                  {(isRemovingBackground || isGeneratingAIImage) && (
+                                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 rounded-lg backdrop-blur-[1px] z-10">
+                                      <div className="relative h-12 w-12">
+                                        <svg className="h-full w-full rotate-[-90deg]">
+                                          <circle
+                                            cx="24"
+                                            cy="24"
+                                            r="20"
+                                            stroke="currentColor"
+                                            strokeWidth="4"
+                                            fill="transparent"
+                                            className="text-white/20"
+                                          />
+                                          <circle
+                                            cx="24"
+                                            cy="24"
+                                            r="20"
+                                            stroke="currentColor"
+                                            strokeWidth="4"
+                                            fill="transparent"
+                                            strokeDasharray={125.6}
+                                            strokeDashoffset={125.6 - (125.6 * aiProgress) / 100}
+                                            className="text-primary transition-all duration-300"
+                                          />
+                                        </svg>
+                                        <div className="absolute inset-0 flex items-center justify-center">
+                                          <span className="text-[10px] font-black text-white">{aiProgress}%</span>
+                                        </div>
                                       </div>
-                                    ) : (
-                                      <>
-                                        <Upload className="h-5 w-5 text-muted-foreground mb-1" />
-                                        <span className="text-xs text-muted-foreground">Upload Image</span>
-                                      </>
-                                    )}
-                                  </button>
-                                )}
+                                      <span className="text-[8px] font-black uppercase tracking-tighter text-white mt-1 text-center px-1">
+                                        {isRemovingBackground ? 'Removing BG...' : 'AI Generating...'}
+                                      </span>
+                                    </div>
+                                  )}
+
+                                  {!isRemovingBackground && !isGeneratingAIImage && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setUploadMenu({ isOpen: true, type: 'product' })}
+                                      className="absolute bottom-0 right-0 bg-primary text-primary-foreground p-1.5 rounded-full hover:bg-primary/90 transition-colors shadow-lg"
+                                    >
+                                      <Camera className="h-3 w-3" />
+                                    </button>
+                                  )}
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setUploadMenu({ isOpen: true, type: 'product' })}
+                                  className="flex flex-col items-center justify-center w-32 h-32 border-2 border-dashed border-muted-foreground rounded-lg hover:border-primary transition-colors relative"
+                                  disabled={isGeneratingAIImage}
+                                >
+                                  {isGeneratingAIImage ? (
+                                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-purple-50/50 rounded-lg">
+                                      <Loader2 className="h-6 w-6 text-purple-600 animate-spin" />
+                                      <span className="text-[10px] font-bold text-purple-700 mt-1">{aiProgress}%</span>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <Upload className="h-5 w-5 text-muted-foreground mb-1" />
+                                      <span className="text-xs text-muted-foreground">Upload Image</span>
+                                    </>
+                                  )}
+                                </button>
+                              )}
                               <div className="flex flex-wrap gap-2">
                                 <Button
                                   type="button"
@@ -2755,8 +2721,8 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
                     </Card>
                   )}
 
-                  {/* Shop Offers */}
-                  {selectedShop && (
+                  {/* Shop Offers — now in its own dedicated Offers tab */}
+                  {false && selectedShop && (
                     <Card className={currentPlan?.plan_name === 'free' ? 'border-amber-200 bg-amber-50' : ''}>
                       <CardHeader>
                         <CardTitle className="text-lg sm:text-2xl flex items-center gap-2">
@@ -2842,7 +2808,7 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
                                     alt="Offer"
                                     className={`h-32 w-32 rounded-lg object-cover border-2 border-primary transition-all duration-300 ${(isRemovingBackground || isGeneratingAIImage) ? 'blur-[2px] grayscale-[0.5]' : ''}`}
                                   />
-                                  
+
                                   {/* Targeted Loading Overlay */}
                                   {(isRemovingBackground || isGeneratingAIImage) && (
                                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 rounded-lg backdrop-blur-[1px] z-10">
@@ -3081,6 +3047,435 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
                 </div>
               )}
 
+              {currentTab === 'products' && selectedShop && (
+                <div className="space-y-6 pb-24 sm:pb-8 relative">
+                  {/* Premium Form Section */}
+                  <Card className={`overflow-hidden border-0 shadow-xl rounded-[24px] ${currentPlan?.plan_name === 'free' ? 'bg-amber-50/50' : 'bg-white dark:bg-slate-900/50 backdrop-blur-md'}`}>
+                    <div className="bg-gradient-to-r from-red-500 to-rose-600 p-4 sm:p-6 text-white">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h2 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
+                            <Package className="h-6 w-6" />
+                            Featured Products
+                          </h2>
+                          <p className="text-xs text-white/80 mt-1">Manage your storefront highlights</p>
+                        </div>
+                        {currentPlan?.plan_name === 'free' && (
+                          <Badge variant="secondary" className="bg-white/20 text-white border-0">
+                            <Lock className="h-3 w-3 mr-1" /> Basic Required
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+
+                    <CardContent className="p-4 sm:p-8 space-y-6">
+                      {currentPlan?.plan_name === 'free' ? (
+                        <div className="text-center py-10 space-y-4">
+                          <div className="bg-amber-100 dark:bg-amber-900/30 w-16 h-16 rounded-full flex items-center justify-center mx-auto">
+                            <Zap className="h-8 w-8 text-amber-600" />
+                          </div>
+                          <h3 className="text-lg font-bold text-slate-800 dark:text-white">Upgrade to Access</h3>
+                          <p className="text-sm text-slate-600 dark:text-slate-400 max-w-xs mx-auto">Featured products help you highlight bestsellers and increase sales by up to 40%.</p>
+                          <Button onClick={() => toast.error('Please upgrade to BASIC plan')} className="bg-amber-600 hover:bg-amber-700 rounded-xl px-8">
+                            Upgrade Now (₹99)
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="space-y-6">
+                          {/* Form Title */}
+                          <div className="flex items-center gap-2 border-b pb-4">
+                            <div className="h-8 w-1 bg-red-500 rounded-full" />
+                            <h3 className="text-base font-bold text-slate-800 dark:text-white">
+                              {editingProduct ? 'Edit Product Details' : 'Add New Highlight'}
+                            </h3>
+                          </div>
+
+                          <div className="space-y-5">
+                            {/* Product Title */}
+                            <div className="space-y-1.5">
+                              <Label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Product Name</Label>
+                              <Input
+                                placeholder="e.g. Fresh Milk 1L"
+                                value={newFeaturedProduct.title}
+                                onChange={(e) => setNewFeaturedProduct({ ...newFeaturedProduct, title: e.target.value })}
+                                className="h-12 rounded-xl bg-slate-50 border-slate-200 focus:bg-white focus:ring-red-500/20 text-base font-medium"
+                              />
+                            </div>
+
+                            {/* Pricing Section */}
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-1.5">
+                                <Label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Sale Price</Label>
+                                <div className="relative">
+                                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">₹</span>
+                                  <Input
+                                    type="number"
+                                    placeholder="200"
+                                    value={newFeaturedProduct.price}
+                                    onChange={(e) => setNewFeaturedProduct({ ...newFeaturedProduct, price: e.target.value })}
+                                    className="h-12 pl-7 rounded-xl bg-slate-50 border-slate-200 text-base font-bold text-red-600"
+                                  />
+                                </div>
+                              </div>
+                              <div className="space-y-1.5">
+                                <Label className="text-xs font-bold text-slate-500 uppercase tracking-tight">MRP Price</Label>
+                                <div className="relative">
+                                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">₹</span>
+                                  <Input
+                                    type="number"
+                                    placeholder="240"
+                                    value={newFeaturedProduct.originalPrice}
+                                    onChange={(e) => setNewFeaturedProduct({ ...newFeaturedProduct, originalPrice: e.target.value })}
+                                    className="h-12 pl-7 rounded-xl bg-slate-50 border-slate-200 text-base font-medium text-slate-400"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Stats & Category */}
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-1.5">
+                                <Label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Stock</Label>
+                                <Input
+                                  type="number"
+                                  placeholder="50"
+                                  value={newFeaturedProduct.inventory}
+                                  onChange={(e) => setNewFeaturedProduct({ ...newFeaturedProduct, inventory: e.target.value })}
+                                  className="h-12 rounded-xl bg-slate-50 border-slate-200 text-base font-medium"
+                                />
+                              </div>
+                              <div className="space-y-1.5">
+                                <Label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Discount %</Label>
+                                <Input
+                                  type="number"
+                                  placeholder="15%"
+                                  value={newFeaturedProduct.discountPercentage}
+                                  onChange={(e) => setNewFeaturedProduct({ ...newFeaturedProduct, discountPercentage: e.target.value })}
+                                  className="h-12 rounded-xl bg-slate-50 border-slate-200 text-base font-medium"
+                                />
+                              </div>
+                            </div>
+
+                            {/* Category Select */}
+                            <div className="space-y-1.5">
+                              <Label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Category</Label>
+                              <select
+                                value={newFeaturedProduct.category}
+                                onChange={(e) => setNewFeaturedProduct({ ...newFeaturedProduct, category: e.target.value })}
+                                className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50 text-base font-medium focus:ring-2 focus:ring-red-500/20"
+                              >
+                                <option value="">Auto-categorize</option>
+                                <option value="dairy">Dairy & Bakery</option>
+                                <option value="snacks">Snacks & Munchies</option>
+                                <option value="beverages">Cold Drinks & Juices</option>
+                                <option value="instant">Instant Food</option>
+                                <option value="grocery">Atta, Rice & Dal</option>
+                                <option value="household">Cleaning & Household</option>
+                                <option value="personal">Personal Care</option>
+                                <option value="other">Other</option>
+                              </select>
+                            </div>
+
+                            {/* Advanced Image Upload Section */}
+                            <div className="space-y-3">
+                              <Label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Product Image</Label>
+                              <div className="flex gap-4 items-center">
+                                {newFeaturedProduct.imageUrl ? (
+                                  <div className="relative">
+                                    <div className="w-32 h-32 rounded-2xl overflow-hidden border-2 border-red-500/20 bg-white shadow-lg group">
+                                      <img
+                                        src={newFeaturedProduct.imageUrl}
+                                        alt="Product"
+                                        className={`h-full w-full object-contain transition-all duration-300 ${(isRemovingBackground || isGeneratingAIImage) ? 'blur-sm scale-90' : 'group-hover:scale-110'}`}
+                                      />
+                                      {(isRemovingBackground || isGeneratingAIImage) && (
+                                        <div className="absolute inset-0 flex items-center justify-center bg-white/50">
+                                          <Loader2 className="h-6 w-6 animate-spin text-red-500" />
+                                        </div>
+                                      )}
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => setUploadMenu({ isOpen: true, type: 'product' })}
+                                      className="absolute -bottom-2 -right-2 bg-red-600 text-white p-2.5 rounded-full shadow-xl hover:scale-110 transition-transform active:scale-95"
+                                    >
+                                      <Camera className="h-4 w-4" />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => setUploadMenu({ isOpen: true, type: 'product' })}
+                                    className="w-32 h-32 flex flex-col items-center justify-center bg-slate-50 border-2 border-dashed border-slate-300 rounded-2xl hover:border-red-500 hover:bg-red-50/30 transition-all group"
+                                  >
+                                    <div className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                                      <Upload className="h-5 w-5 text-slate-400 group-hover:text-red-500" />
+                                    </div>
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Upload Image</span>
+                                  </button>
+                                )}
+
+                                <div className="flex flex-col gap-2 flex-1">
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="rounded-xl h-10 border-indigo-200 text-indigo-600 hover:bg-indigo-50 font-bold"
+                                    onClick={async () => { const g = await generateAIImage(newFeaturedProduct.title, ''); if (g) setNewFeaturedProduct({ ...newFeaturedProduct, imageUrl: g }); }}
+                                    disabled={isGeneratingAIImage || !newFeaturedProduct.title}
+                                  >
+                                    <Sparkles className="h-4 w-4 mr-2" /> AI GENERATE
+                                  </Button>
+                                  {newFeaturedProduct.imageUrl && (
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      className="rounded-xl h-10 border-red-200 text-red-600 hover:bg-red-50 font-bold"
+                                      onClick={async () => { const p = await processRemoveBackground(newFeaturedProduct.imageUrl); if (p) setNewFeaturedProduct({ ...newFeaturedProduct, imageUrl: p }); }}
+                                      disabled={isRemovingBackground}
+                                    >
+                                      <Eraser className="h-4 w-4 mr-2" /> CLEAN BG
+                                    </Button>
+                                  )}
+                                  <p className="text-[9px] text-slate-400 italic px-1 leading-tight">
+                                    Pro-tip: Clear backgrounds make your products look 2x more premium!
+                                  </p>
+                                </div>
+                              </div>
+                              <input ref={productImageInputRef} type="file" accept="image/*" onChange={(e) => handleImageUpload(e, 'product')} className="hidden" />
+                              <input ref={productCameraInputRef} type="file" accept="image/*" capture="environment" onChange={(e) => handleImageUpload(e, 'product')} className="hidden" />
+                            </div>
+                          </div>
+
+                          {/* Sticky Bottom CTA for Mobile */}
+                          <div className="fixed bottom-4 left-4 right-4 z-40 sm:static sm:bottom-auto sm:left-auto sm:right-auto">
+                            {editingProduct ? (
+                              <div className="flex gap-2">
+                                <Button
+                                  onClick={handleUpdateFeaturedProduct}
+                                  className="flex-1 h-14 sm:h-12 rounded-2xl bg-gradient-to-r from-red-600 to-rose-600 text-white font-bold shadow-xl shadow-red-200 text-base active:scale-95 transition-transform"
+                                >
+                                  <CheckCircle className="mr-2 h-5 w-5" /> Update Changes
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  onClick={() => { setEditingProduct(null); setNewFeaturedProduct({ title: '', price: '', originalPrice: '', discountPercentage: '', category: '', imageUrl: '', inventory: '' }); }}
+                                  className="h-14 sm:h-12 px-6 rounded-2xl border-slate-200 bg-white shadow-lg font-bold"
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+                            ) : (
+                              <Button
+                                onClick={handleAddFeaturedProduct}
+                                className="w-full h-14 sm:h-12 rounded-2xl bg-gradient-to-r from-red-600 to-rose-600 text-white font-bold shadow-xl shadow-red-200 text-lg active:scale-95 transition-transform"
+                              >
+                                <Plus className="mr-2 h-6 w-6" /> Add Product to Store
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Product Inventory Section */}
+                  {featuredProducts.length > 0 && (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between px-2">
+                        <div className="flex items-center gap-2">
+                          <div className="bg-red-500 p-1.5 rounded-lg">
+                            <Package className="h-4 w-4 text-white" />
+                          </div>
+                          <h4 className="font-black text-sm text-slate-800 uppercase tracking-tighter">
+                            Live Inventory ({featuredProducts.length})
+                          </h4>
+                        </div>
+                        <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-full uppercase">
+                          Last Sync: Just now
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
+                        {featuredProducts.map((product) => (
+                          <div
+                            key={product.id}
+                            className="group relative flex flex-col bg-white dark:bg-slate-900 rounded-[20px] shadow-sm hover:shadow-xl transition-all duration-300 border border-slate-100 dark:border-slate-800 overflow-hidden"
+                          >
+                            {/* Action Buttons Overlay */}
+                            <div className="absolute top-2 right-2 flex flex-col gap-1.5 z-10 opacity-0 group-hover:opacity-100 translate-x-4 group-hover:translate-x-0 transition-all duration-300">
+                              <button
+                                onClick={() => handleEditProduct(product)}
+                                className="bg-white/90 dark:bg-slate-800/90 text-indigo-600 p-2 rounded-full shadow-lg hover:bg-indigo-600 hover:text-white transition-colors"
+                                title="Edit Product"
+                              >
+                                <Edit className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteFeaturedProduct(product.id)}
+                                className="bg-white/90 dark:bg-slate-800/90 text-red-600 p-2 rounded-full shadow-lg hover:bg-red-600 hover:text-white transition-colors"
+                                title="Delete Product"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+
+                            {/* Product Image Section */}
+                            <div className="relative aspect-square overflow-hidden bg-white p-2">
+                              <img
+                                src={product.imageUrl}
+                                alt={product.title}
+                                className="h-full w-full object-contain group-hover:scale-110 transition-transform duration-500"
+                              />
+
+                              {/* Stock Badge */}
+                              <div className={`absolute bottom-2 left-2 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider shadow-sm ${parseInt(product.inventory || '0') > 10 ? 'bg-emerald-500 text-white' : 'bg-amber-500 text-white'}`}>
+                                Stock: {product.inventory || '0'}
+                              </div>
+
+                              {/* Discount Badge */}
+                              {product.discountPercentage && (
+                                <div className="absolute top-0 left-0 bg-red-600 text-white text-[10px] font-black px-3 py-1 rounded-br-xl shadow-lg">
+                                  {product.discountPercentage}% OFF
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Product Info */}
+                            <div className="p-3 sm:p-4 flex flex-col flex-1 border-t border-slate-50 dark:border-slate-800">
+                              <span className="text-[9px] font-bold text-slate-400 uppercase mb-1">{product.category || 'Grocery'}</span>
+                              <h5 className="font-bold text-xs sm:text-sm line-clamp-2 text-slate-800 dark:text-slate-200 mb-2 min-h-[32px] leading-tight">
+                                {product.title}
+                              </h5>
+
+                              <div className="mt-auto flex items-end justify-between">
+                                <div className="flex flex-col">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-sm sm:text-base font-black text-red-600">₹{product.price}</span>
+                                    {product.originalPrice && (
+                                      <span className="text-[10px] text-slate-400 line-through decoration-slate-400/50">₹{product.originalPrice}</span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="h-7 w-7 rounded-full bg-slate-50 flex items-center justify-center sm:hidden">
+                                  <Edit className="h-3 w-3 text-slate-400" />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {currentTab === 'offers' && selectedShop && (
+                <div className="space-y-4 sm:space-y-6 pb-6">
+                  <Card className={currentPlan?.plan_name === 'free' ? 'border-amber-200 bg-amber-50' : ''}>
+                    <CardHeader>
+                      <CardTitle className="text-lg sm:text-2xl flex items-center gap-2">
+                        <Megaphone className="h-5 w-5" />
+                        Shop Offers
+                        {currentPlan?.plan_name === 'free' && <Lock className="h-4 w-4 text-amber-600 ml-2" />}
+                      </CardTitle>
+                      <CardDescription>{currentPlan?.plan_name === 'free' ? 'Upgrade to BASIC to add offers' : 'Add and manage current offers and promotions'}</CardDescription>
+                    </CardHeader>
+                    {currentPlan?.plan_name === 'free' ? (
+                      <CardContent>
+                        <div className="text-center space-y-4 py-6">
+                          <p className="text-sm text-amber-800">This feature is only available in the BASIC plan and above.</p>
+                          <Button onClick={() => toast.error('Please upgrade to BASIC plan to add offers')} className="bg-amber-600 hover:bg-amber-700">
+                            <Zap className="mr-2 h-4 w-4" />Upgrade to BASIC Plan (₹99)
+                          </Button>
+                        </div>
+                      </CardContent>
+                    ) : (
+                      <CardContent className="space-y-4 sm:space-y-6">
+                        <div className="border border-dashed border-muted-foreground rounded-lg p-4 space-y-4">
+                          <h4 className="font-semibold text-sm sm:text-base">Add New Offer</h4>
+                          <Input placeholder="Offer Title (e.g., 50% Off Haircut)" value={newOffer.title} onChange={(e) => setNewOffer({ ...newOffer, title: e.target.value })} className="text-sm" />
+                          <textarea placeholder="Offer Description (optional)" value={newOffer.description} onChange={(e) => setNewOffer({ ...newOffer, description: e.target.value })} className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm" rows={2} />
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div className="space-y-2">
+                              <Label className="text-xs sm:text-sm">Discount Type</Label>
+                              <select value={newOffer.discountType} onChange={(e) => setNewOffer({ ...newOffer, discountType: e.target.value as 'percentage' | 'amount' })} className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm">
+                                <option value="percentage">Percentage (%)</option>
+                                <option value="amount">Fixed Amount (₹)</option>
+                              </select>
+                            </div>
+                            <div>
+                              <Label className="text-xs sm:text-sm">Discount Value</Label>
+                              <Input placeholder={newOffer.discountType === 'percentage' ? 'e.g., 50' : 'e.g., 500'} type="number" step="0.01" min="0" value={newOffer.discount} onChange={(e) => setNewOffer({ ...newOffer, discount: e.target.value })} className="text-sm" />
+                            </div>
+                          </div>
+                          <div>
+                            <Label className="text-xs sm:text-sm">Valid Until</Label>
+                            <Input type="datetime-local" value={newOffer.validUntil} onChange={(e) => setNewOffer({ ...newOffer, validUntil: e.target.value })} className="text-sm" />
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-xs sm:text-sm">Offer Image (Optional)</Label>
+                            <div className="flex gap-3 items-start flex-wrap">
+                              {newOffer.imageUrl ? (
+                                <div className="relative inline-block group">
+                                  <img src={newOffer.imageUrl} alt="Offer" className={`h-28 w-28 rounded-lg object-cover border-2 border-primary ${(isRemovingBackground || isGeneratingAIImage) ? 'blur-[2px]' : ''}`} />
+                                  {!isRemovingBackground && !isGeneratingAIImage && (
+                                    <button type="button" onClick={() => setUploadMenu({ isOpen: true, type: 'offer' })} className="absolute bottom-0 right-0 bg-primary text-primary-foreground p-1.5 rounded-full shadow-lg">
+                                      <Camera className="h-3 w-3" />
+                                    </button>
+                                  )}
+                                </div>
+                              ) : (
+                                <button type="button" onClick={() => setUploadMenu({ isOpen: true, type: 'offer' })} className="flex flex-col items-center justify-center w-28 h-28 border-2 border-dashed border-muted-foreground rounded-lg hover:border-primary transition-colors" disabled={isGeneratingAIImage}>
+                                  <Upload className="h-5 w-5 text-muted-foreground mb-1" />
+                                  <span className="text-xs text-muted-foreground">Upload</span>
+                                </button>
+                              )}
+                              <div className="flex flex-col gap-2">
+                                <Button type="button" size="sm" variant="outline" className="h-8 text-[10px] font-black uppercase border-purple-200 text-purple-600 hover:bg-purple-50" onClick={async () => { const g = await generateAIImage(newOffer.title, ''); if (g) setNewOffer({ ...newOffer, imageUrl: g }); }} disabled={isGeneratingAIImage || !newOffer.title}>
+                                  <Sparkles className="h-3 w-3 mr-1" /> AI
+                                </Button>
+                                {newOffer.imageUrl && (
+                                  <Button type="button" size="sm" variant="outline" className="h-8 text-[10px] font-black uppercase border-red-200 text-red-600 hover:bg-red-50" onClick={async () => { const p = await processRemoveBackground(newOffer.imageUrl); if (p) setNewOffer({ ...newOffer, imageUrl: p }); }} disabled={isRemovingBackground}>
+                                    <Eraser className="h-3 w-3 mr-1" /> No BG
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                            <input ref={offerImageInputRef} type="file" accept="image/*" onChange={(e) => handleImageUpload(e, 'offer')} className="hidden" />
+                            <input ref={offerCameraInputRef} type="file" accept="image/*" capture="environment" onChange={(e) => handleImageUpload(e, 'offer')} className="hidden" />
+                          </div>
+                          <Button onClick={handleAddOffer} className="w-full"><Plus className="mr-2 h-4 w-4" />Add Offer</Button>
+                        </div>
+
+                        {shopOffers.filter(o => new Date(o.validUntil) > new Date() && o.isActive).length > 0 && (
+                          <div className="space-y-3">
+                            <h4 className="font-semibold text-sm text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                              <Megaphone className="h-4 w-4" /> Active Offers
+                            </h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {shopOffers.filter(o => new Date(o.validUntil) > new Date() && o.isActive).map((offer) => (
+                                <Card key={offer.id} className="overflow-hidden">
+                                  {offer.imageUrl && <div className="relative aspect-video bg-muted overflow-hidden"><img src={offer.imageUrl} alt={offer.title} className="h-full w-full object-cover" /></div>}
+                                  <CardContent className="p-3 space-y-2">
+                                    <h5 className="font-semibold text-sm">{offer.title}</h5>
+                                    {offer.description && <p className="text-xs text-muted-foreground line-clamp-2">{offer.description}</p>}
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-sm font-bold text-primary">{offer.discountPercentage ? `${offer.discountPercentage}% off` : `₹${offer.discountAmount?.toFixed(2)} off`}</span>
+                                      <button onClick={() => handleDeleteOffer(offer.id)} className="text-red-500 hover:text-red-600 p-1"><Trash2 className="h-4 w-4" /></button>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">Expires: {formatIST(offer.validUntil, false)}</p>
+                                  </CardContent>
+                                </Card>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </CardContent>
+                    )}
+                  </Card>
+                </div>
+              )}
+
               {currentTab === 'campaigns' && (
                 <div className="space-y-4 sm:space-y-6 pb-6">
                   {currentPlan?.plan_name === 'free' ? (
@@ -3136,6 +3531,52 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
 
               {currentTab === 'customization' && selectedShop && (
                 <div className="space-y-4 sm:space-y-6 pb-6">
+                  {/* Booking Settings moved from General Settings */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg sm:text-2xl flex items-center gap-2">
+                        <Calendar className="h-5 w-5" />
+                        Booking Settings
+                      </CardTitle>
+                      <CardDescription>Configure how your booking system works</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg border">
+                        <div className="space-y-0.5">
+                          <Label className="text-base">Booking Token Facility</Label>
+                          <p className="text-sm text-muted-foreground">
+                            Enable or disable the entire booking system for your shop
+                          </p>
+                        </div>
+                        <Switch
+                          checked={formData.isTokenBookingEnabled !== false}
+                          onCheckedChange={(checked) => {
+                            const updated = { ...formData, isTokenBookingEnabled: checked };
+                            setFormData(updated);
+                            handleSaveSettings(updated);
+                          }}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg border">
+                        <div className="space-y-0.5">
+                          <Label className="text-base">Pause Bookings</Label>
+                          <p className="text-sm text-muted-foreground">
+                            Temporarily stop taking new bookings (e.g., when you are busy)
+                          </p>
+                        </div>
+                        <Switch
+                          checked={formData.tokenBookingPaused || false}
+                          onCheckedChange={(checked) => {
+                            const updated = { ...formData, tokenBookingPaused: checked };
+                            setFormData(updated);
+                            handleSaveSettings(updated);
+                          }}
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+
                   <Card>
                     <CardHeader>
                       <CardTitle className="text-lg sm:text-2xl flex items-center gap-2">
@@ -3179,7 +3620,7 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
                             alt="Shop"
                             className={`w-full h-full object-cover group-hover:scale-105 transition-all duration-500 ${(isRemovingBackground || isGeneratingAIImage) ? 'blur-[4px] grayscale-[0.5]' : ''}`}
                           />
-                          
+
                           {/* Targeted Loading Overlay for Customization Tab */}
                           {(isRemovingBackground || isGeneratingAIImage) && (
                             <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm z-10">

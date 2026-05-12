@@ -362,9 +362,6 @@ const OrderCard = ({ order, actionLoading, handleAccept, handleRejectClick, hand
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <h3 className="font-bold text-gray-900 truncate">{order.customer_name}</h3>
-              <span className="text-[10px] font-black bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md">
-                ID: {order.order_code || '------'}
-              </span>
             </div>
             <p className="text-[10px] text-muted-foreground">{formatOrderDate(order.created_at)}</p>
           </div>

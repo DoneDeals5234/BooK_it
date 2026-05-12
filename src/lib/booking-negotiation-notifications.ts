@@ -1,23 +1,9 @@
-import {
-  sendNotificationToPlayerIds,
-  sendNotificationByUserId,
-  sendNotificationToCurrentDevice,
-} from '@/lib/onesignal-messaging';
+import { sendNativeNotification } from '@/lib/native-notifications';
 import { scheduleAlarm } from '@/lib/alarm-scheduler';
-
-interface NotificationOptions {
-  title: string;
-  body: string;
-  data?: Record<string, any>;
-  playerIds?: string[];
-  userId?: string;
-  alarmDurationSeconds?: number;
-  useNativeAlarm?: boolean;
-}
 
 /**
  * Send customer time selection notification to owner
- * - Sends OneSignal notification using user ID (external ID)
+ * - Sends FCM notification using user ID
  * - Schedules 1-minute native alarm on owner device
  */
 export const notifyOwnerOfBookingRequest = async (options: {
@@ -38,8 +24,8 @@ export const notifyOwnerOfBookingRequest = async (options: {
   } = options;
 
   try {
-    // Send OneSignal notification using user ID (external ID)
-    await sendNotificationByUserId([ownerId], {
+    // Send FCM notification using user ID
+    await sendNativeNotification([ownerId], {
       title: `New Booking Request - ${customerName}`,
       body: `${serviceName} at ${requestedTime}`,
       data: {
@@ -75,7 +61,7 @@ export const notifyOwnerOfBookingRequest = async (options: {
 
 /**
  * Send owner time offer notification to customer
- * - Sends OneSignal notification using user ID (external ID)
+ * - Sends FCM notification using user ID
  * - Schedules 1-minute native alarm on customer device
  */
 export const notifyCustomerOfTimeOffer = async (options: {
@@ -96,8 +82,8 @@ export const notifyCustomerOfTimeOffer = async (options: {
   } = options;
 
   try {
-    // Send OneSignal notification using user ID (external ID)
-    await sendNotificationByUserId([customerId], {
+    // Send FCM notification using user ID
+    await sendNativeNotification([customerId], {
       title: 'Alternative Times Offered',
       body: `${ownerName} offers: ${offeredTimes.join(', ')}`,
       data: {
@@ -131,7 +117,6 @@ export const notifyCustomerOfTimeOffer = async (options: {
 
 /**
  * Send owner not responding notification to customer
- * - Shows popup with Call and Cancel options
  */
 export const notifyCustomerOwnerNotResponding = async (options: {
   customerId: string;
@@ -147,8 +132,7 @@ export const notifyCustomerOwnerNotResponding = async (options: {
   } = options;
 
   try {
-    // Send OneSignal notification using user ID (external ID)
-    await sendNotificationByUserId([customerId], {
+    await sendNativeNotification([customerId], {
       title: 'Owner Not Responding',
       body: 'The owner is not responding. You can call them or cancel the request.',
       data: {
@@ -184,8 +168,7 @@ export const notifyBookingConfirmed = async (options: {
   } = options;
 
   try {
-    // Send OneSignal notification using user ID (external ID)
-    await sendNotificationByUserId([customerId], {
+    await sendNativeNotification([customerId], {
       title: 'Booking Confirmed!',
       body: `${shopName} confirmed your booking for ${serviceName} at ${confirmedTime}`,
       data: {
@@ -217,8 +200,7 @@ export const notifyBookingRejected = async (options: {
   } = options;
 
   try {
-    // Send OneSignal notification using user ID (external ID)
-    await sendNotificationByUserId([customerId], {
+    await sendNativeNotification([customerId], {
       title: 'Booking Rejected',
       body: `${shopName} rejected your booking request for ${serviceName}`,
       data: {
@@ -238,7 +220,6 @@ export const notifyBookingRejected = async (options: {
  */
 export const clearBookingAlarms = async () => {
   try {
-    // Native alarm clearing (if available)
     if (typeof window !== 'undefined' && (window as any).AlarmBridge?.clearAlarm) {
       (window as any).AlarmBridge.clearAlarm();
     }
@@ -248,8 +229,7 @@ export const clearBookingAlarms = async () => {
 };
 
 /**
- * Notify shop owner that customer confirmed their booking via foreground service
- * Called when customer taps "Yes" on the foreground service reminder
+ * Notify shop owner that customer confirmed their booking
  */
 export const notifyOwnerCustomerConfirmed = async (options: {
   ownerId: string;
@@ -263,7 +243,6 @@ export const notifyOwnerCustomerConfirmed = async (options: {
 }) => {
   const {
     ownerId,
-    ownerName,
     customerName,
     serviceName,
     bookingTime,
@@ -273,10 +252,7 @@ export const notifyOwnerCustomerConfirmed = async (options: {
   } = options;
 
   try {
-    console.log(`✅ Notifying owner ${ownerName} that ${customerName} confirmed booking ${bookingId}`);
-
-    // Send OneSignal notification using user ID (external ID)
-    await sendNotificationByUserId([ownerId], {
+    await sendNativeNotification([ownerId], {
       title: '✅ Customer Confirmed',
       body: `${customerName} confirmed they're coming! Token #${tokenNumber} will arrive at ${bookingTime}`,
       data: {
@@ -291,7 +267,6 @@ export const notifyOwnerCustomerConfirmed = async (options: {
       },
     });
 
-    // Also send a mobile notification via native alarm to ensure owner sees it
     if (typeof window !== 'undefined' && (window as any).AlarmBridge?.sendImportantNotification) {
       (window as any).AlarmBridge.sendImportantNotification({
         title: '✅ Customer Confirmed',
@@ -300,8 +275,6 @@ export const notifyOwnerCustomerConfirmed = async (options: {
         tokenNumber,
       });
     }
-
-    console.log(`✅ Owner notification sent for booking ${bookingId}`);
   } catch (err) {
     console.error('Error notifying owner of customer confirmation:', err);
     throw err;
@@ -309,8 +282,7 @@ export const notifyOwnerCustomerConfirmed = async (options: {
 };
 
 /**
- * Notify shop owner that customer cancelled their booking via foreground service
- * Called when customer taps "No" on the foreground service reminder
+ * Notify shop owner that customer cancelled their booking
  */
 export const notifyOwnerCustomerCancelled = async (options: {
   ownerId: string;
@@ -324,7 +296,6 @@ export const notifyOwnerCustomerCancelled = async (options: {
 }) => {
   const {
     ownerId,
-    ownerName,
     customerName,
     serviceName,
     bookingTime,
@@ -334,10 +305,7 @@ export const notifyOwnerCustomerCancelled = async (options: {
   } = options;
 
   try {
-    console.log(`❌ Notifying owner ${ownerName} that ${customerName} cancelled booking ${bookingId}`);
-
-    // Send OneSignal notification using user ID (external ID)
-    await sendNotificationByUserId([ownerId], {
+    await sendNativeNotification([ownerId], {
       title: '❌ Customer Cancelled',
       body: `${customerName} cancelled their booking for ${serviceName} at ${bookingTime}`,
       data: {
@@ -352,7 +320,6 @@ export const notifyOwnerCustomerCancelled = async (options: {
       },
     });
 
-    // Also send a mobile notification via native alarm
     if (typeof window !== 'undefined' && (window as any).AlarmBridge?.sendImportantNotification) {
       (window as any).AlarmBridge.sendImportantNotification({
         title: '❌ Customer Cancelled',
@@ -361,8 +328,6 @@ export const notifyOwnerCustomerCancelled = async (options: {
         tokenNumber,
       });
     }
-
-    console.log(`❌ Owner notification sent for cancellation of booking ${bookingId}`);
   } catch (err) {
     console.error('Error notifying owner of customer cancellation:', err);
     throw err;
@@ -394,10 +359,8 @@ export const notifyBookingCompleted = async (options: {
   } = options;
 
   try {
-    console.log(`✅ Notifying both parties that booking ${bookingId} is completed`);
-
     // Notify customer
-    await sendNotificationByUserId([customerId], {
+    await sendNativeNotification([customerId], {
       title: '✅ Booking Completed',
       body: `Your ${serviceName} appointment at ${shopName} at ${bookingTime} is now complete. Thank you!`,
       data: {
@@ -411,7 +374,7 @@ export const notifyBookingCompleted = async (options: {
     });
 
     // Notify owner
-    await sendNotificationByUserId([ownerId], {
+    await sendNativeNotification([ownerId], {
       title: '✅ Booking Completed',
       body: `${customerName}'s ${serviceName} booking (Token #${tokenNumber}) at ${bookingTime} is completed.`,
       data: {
@@ -424,8 +387,6 @@ export const notifyBookingCompleted = async (options: {
         tokenNumber: tokenNumber.toString(),
       },
     });
-
-    console.log(`✅ Completion notifications sent to both customer and owner for booking ${bookingId}`);
   } catch (err) {
     console.error('Error notifying booking completion:', err);
     throw err;
@@ -453,8 +414,6 @@ export const updateBookingConfirmationStatus = async (
       console.error('Error updating booking confirmation status:', error);
       throw error;
     }
-
-    console.log(`✅ Booking ${bookingId} confirmation status updated to: ${status}`);
   } catch (err) {
     console.error('Error updating booking confirmation status:', err);
     throw err;

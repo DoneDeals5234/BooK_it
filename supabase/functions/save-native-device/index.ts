@@ -28,10 +28,10 @@ serve(async (req: Request) => {
 
   try {
     const body = await req.json();
-    const { userId, email, password, playerId, deviceType = "native" } = body;
+    const { userId, email, password, playerId, deviceType = "native", fcmToken } = body;
 
     console.log('🚀 [START] save-native-device operation');
-    console.log('📦 Input Payload:', JSON.stringify({ userId, email, password: password ? '******' : 'MISSING', playerId, deviceType }));
+    console.log('📦 Input Payload:', JSON.stringify({ userId, email, password: password ? '******' : 'MISSING', playerId, deviceType, hasFcmToken: !!fcmToken }));
 
     if (!userId) {
       console.error('❌ Error: userId is missing in request body');
@@ -60,15 +60,22 @@ serve(async (req: Request) => {
     try {
       const nativeData: any = {
         user_id: userId,
-        email: email || "",
-        player_id: playerId || null,
-        device_type: deviceType,
         last_active: new Date().toISOString(),
       };
+
+      if (email !== undefined) nativeData.email = email || "";
+      if (playerId !== undefined) nativeData.player_id = playerId;
+      if (deviceType !== undefined) nativeData.device_type = deviceType;
 
       if (password && password.trim() !== "") {
         console.log("🔐 Including password in native_devices upsert");
         nativeData.password = password;
+      }
+
+      // Save FCM token if provided (parallel notification system)
+      if (fcmToken) {
+        nativeData.fcm_token = fcmToken;
+        console.log("🔥 Including FCM token in native_devices upsert");
       }
 
       const { data, error: err } = await supabase
@@ -89,16 +96,21 @@ serve(async (req: Request) => {
     try {
       const userData: any = {
         user_id: userId,
-        email: email || "",
-        player_id: playerId || null,
-        is_available: false,
         updated_at: new Date().toISOString()
       };
+
+      if (email !== undefined) userData.email = email || "";
+      if (playerId !== undefined) userData.player_id = playerId;
 
       // Only update password if provided and not empty
       if (password && password.trim() !== "") {
         console.log("🔐 Including password in upsert");
         userData.password = password;
+      }
+
+      // Save FCM token if provided
+      if (fcmToken) {
+        userData.fcm_token = fcmToken;
       }
 
       const { data, error: err } = await supabase

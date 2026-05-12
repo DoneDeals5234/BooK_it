@@ -34,8 +34,20 @@ export const useUserProfile = () => {
 
 export const UserProfileProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState<UserProfile | null>(() => {
+    try {
+      const cached = localStorage.getItem('user_profile_cache');
+      if (cached) return JSON.parse(cached);
+    } catch(e) {}
+    return null;
+  });
+  const [loading, setLoading] = useState(() => {
+    try {
+      const cached = localStorage.getItem('user_profile_cache');
+      if (cached) return false;
+    } catch(e) {}
+    return true;
+  });
 
   const refreshProfile = async () => {
     if (!user) {
@@ -48,6 +60,9 @@ export const UserProfileProvider = ({ children }: { children: ReactNode }) => {
       setLoading(true);
       const userProfile = await getUserProfile(user.uid);
       setProfile(userProfile);
+      if (userProfile) {
+        try { localStorage.setItem('user_profile_cache', JSON.stringify(userProfile)); } catch(e) {}
+      }
     } catch (error) {
       console.error('Error loading profile:', {
         message: error instanceof Error ? error.message : String(error),
@@ -109,6 +124,7 @@ export const UserProfileProvider = ({ children }: { children: ReactNode }) => {
       const savedProfile = await saveUserProfile(user.uid, name, phone, imageUrl, finalLocationData);
       if (savedProfile) {
         setProfile(savedProfile);
+        try { localStorage.setItem('user_profile_cache', JSON.stringify(savedProfile)); } catch(e) {}
         return true;
       }
       return false;

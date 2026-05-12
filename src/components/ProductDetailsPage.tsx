@@ -11,7 +11,7 @@ import type { ProductReview } from '@/lib/supabase-marketplace';
 import { getShopById } from '@/lib/shops-storage';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserProfile } from '@/contexts/UserProfileContext';
-import { OrderAmountModal } from '@/components/OrderAmountModal';
+// OrderAmountModal removed in favor of CheckoutPage
 import { StarRating } from '@/components/StarRating';
 import { formatIST } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
@@ -24,13 +24,14 @@ export function ProductDetailsPage() {
 
   const [product, setProduct] = useState<FeaturedProduct | null>(null);
   const [shopName, setShopName] = useState<string>('Loading Shop...');
+  const [shopImage, setShopImage] = useState<string | undefined>(undefined);
+  const [shopAddress, setShopAddress] = useState<string | undefined>(undefined);
   const [similarProducts, setSimilarProducts] = useState<FeaturedProduct[]>([]);
   const [reviews, setReviews] = useState<ProductReview[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   
-  // Order Modal state
-  const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
+  // Order Modal state removed
 
   // Review State
   const [reviewText, setReviewText] = useState('');
@@ -52,7 +53,11 @@ export function ProductDetailsPage() {
             setProduct(cachedProduct);
             if (cachedProduct.shopId) {
               getShopById(cachedProduct.shopId).then(shopInfo => {
-                if (shopInfo) setShopName(shopInfo.name);
+                if (shopInfo) {
+                  setShopName(shopInfo.name);
+                  setShopImage(shopInfo.shopImageUrl);
+                  setShopAddress(shopInfo.location);
+                }
               });
             }
             setLoading(false); // Stop spinner immediately
@@ -71,7 +76,11 @@ export function ProductDetailsPage() {
           
           // Load shop info
           const shopInfo = await getShopById(fetchedProduct.shopId);
-          if (shopInfo) setShopName(shopInfo.name);
+          if (shopInfo) {
+            setShopName(shopInfo.name);
+            setShopImage(shopInfo.shopImageUrl);
+            setShopAddress(shopInfo.location);
+          }
 
           // Load similar products
           getSimilarProducts(fetchedProduct.shopId, productId).then(setSimilarProducts);
@@ -397,7 +406,9 @@ export function ProductDetailsPage() {
           Add to Cart
         </Button>
         <Button 
-          onClick={() => setIsOrderModalOpen(true)}
+          onClick={() => {
+          navigate(`/checkout/${productId}`, { state: { product, shop: { name: shopName, shopImageUrl: shopImage, location: shopAddress, id: product?.shopId } } });
+        }}
           className="flex-1 h-14 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-black text-sm uppercase tracking-wide shadow-lg shadow-red-500/30 transition-all active:scale-95"
         >
           <Navigation className="h-5 w-5 mr-2" />
@@ -405,19 +416,6 @@ export function ProductDetailsPage() {
         </Button>
       </div>
 
-      {/* Order Modal using existing component */}
-      <OrderAmountModal 
-        isOpen={isOrderModalOpen}
-        onClose={() => setIsOrderModalOpen(false)}
-        shopId={product.shopId}
-        shopName={shopName}
-        productName={product.title}
-        productPrice={product.price}
-        productImage={product.imageUrl}
-        shopLat={product.latitude || undefined}
-        shopLng={product.longitude || undefined}
-        shopMapLink={product.shopMapLink || undefined}
-      />
     </div>
   );
 }

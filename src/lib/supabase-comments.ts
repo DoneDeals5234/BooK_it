@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { sendNativeNotification } from './native-notifications';
 
 export interface Comment {
   id: string;
@@ -11,7 +12,7 @@ export interface Comment {
   updatedAt: string;
 }
 
-// Add a new comment
+// Add a new comment — notify video owner
 export const addComment = async (
   videoId: string,
   userId: string,
@@ -35,6 +36,25 @@ export const addComment = async (
     if (error) {
       console.error('Error adding comment:', error);
       return null;
+    }
+
+    // Notify the video owner (if commenter is not the owner)
+    try {
+      const { data: video } = await supabase
+        .from('videos')
+        .select('uploader_id, caption')
+        .eq('id', videoId)
+        .single();
+
+      if (video?.uploader_id && video.uploader_id !== userId) {
+        sendNativeNotification([video.uploader_id], {
+          title: '💬 New Comment on Your Video!',
+          body: `${uploaderName}: "${commentText.slice(0, 60)}${commentText.length > 60 ? '...' : ''}"`,
+          data: { type: 'video_comment', video_id: videoId, route: '/videos' }
+        }).catch(console.error);
+      }
+    } catch (notifyErr) {
+      console.warn('Failed to notify video owner about comment:', notifyErr);
     }
 
     return {

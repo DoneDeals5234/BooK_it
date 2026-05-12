@@ -13,12 +13,12 @@ serve(async (req) => {
   }
 
   try {
-    const { 
-      shopId, 
-      customerId, 
-      customerName, 
-      customerPhone, 
-      amount, 
+    const {
+      shopId,
+      customerId,
+      customerName,
+      customerPhone,
+      amount,
       description,
       quantity,
       address,
@@ -33,31 +33,45 @@ serve(async (req) => {
       customerLat,
       customerLng,
       shopLat,
-      shopLng
+      shopLng,
+      houseNo,
+      landmark
     } = await req.json()
 
     // Validate required fields
     if (!shopId || !customerId || !customerName || !customerPhone || !amount) {
       return new Response(
-        JSON.stringify({ 
-          error: 'Missing required fields: shopId, customerId, customerName, customerPhone, amount' 
+        JSON.stringify({
+          error: 'Missing required fields: shopId, customerId, customerName, customerPhone, amount'
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       )
     }
 
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+    if (!supabaseKey) {
+      console.error('❌ Missing SUPABASE_SERVICE_ROLE_KEY environment variable');
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Server configuration error', 
+          details: 'SUPABASE_SERVICE_ROLE_KEY is not set on the server.' 
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      )
+    }
+
     // Initialize Supabase client with service role key (bypasses RLS)
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
+    const supabase = createClient(supabaseUrl, supabaseKey)
 
     // 1. Generate 6-digit numerical order code for verification/display
     const orderCode = Math.floor(100000 + Math.random() * 900000).toString();
 
     // 2. Assign OTP for delivery orders (ensure it matches orderCode)
-    const otpCode = orderCode; 
-    
+    const otpCode = orderCode;
+
     // 3. Fetch shop data for notification and snapshot
     const { data: shopData } = await supabase
       .from('shops')
@@ -94,6 +108,8 @@ serve(async (req) => {
           shop_lng: shopLng,
           otp_code: otpCode,
           order_code: orderCode,
+          house_no: houseNo,
+          landmark: landmark,
           expires_at: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString()
         }
       ])
@@ -101,9 +117,15 @@ serve(async (req) => {
       .single()
 
     if (error) {
-      console.error('❌ Supabase error inserting order:', error)
+      console.error('❌ Supabase error inserting order:', JSON.stringify(error, null, 2))
       return new Response(
-        JSON.stringify({ error: 'Failed to create order', details: error.message }),
+        JSON.stringify({
+          success: false,
+          error: 'Failed to create order',
+          details: error.message,
+          code: error.code,
+          hint: error.hint
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       )
     }
@@ -111,22 +133,37 @@ serve(async (req) => {
     // TRIGGER NOTIFICATIONS
     try {
       // 1. Notify Customer (Order Confirmation)
-      await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-notification-by-userid`, {
+      const customerNotifRes = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-native-notification`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
         },
         body: JSON.stringify({
-          user_ids: [customerId],
-          title: 'Order Placed! 🛒',
-          body: `Your order of ₹${amount} has been placed. Waiting for shop owner to confirm...`,
-          data: { type: 'order_update', order_id: order.id }
+          userIds: [customerId],
+          title: '🛒 Order Placed Successfully!',
+          body: `Your order for ₹${totalAmount || amount} from ${shopData?.name || 'the shop'} has been placed. Waiting for confirmation...`,
+          data: { type: 'order_placed', order_id: order.id, order_code: orderCode }
         }),
       });
+      console.log(`📱 Customer notification status: ${customerNotifRes.status}`);
 
-      // 2. Notify Shop Owner (The "Ringing" Alert)
-      if (shopData?.owner_email) {
+      // 2. Notify Shop Owner — try shop_owners table first (most reliable)
+      let ownerUserIds: string[] = [];
+
+      // Method A: shop_owners table (preferred)
+      const { data: shopOwners } = await supabase
+        .from('shop_owners')
+        .select('user_id')
+        .eq('shop_id', shopId);
+
+      if (shopOwners && shopOwners.length > 0) {
+        ownerUserIds = shopOwners.map((o: any) => o.user_id).filter(Boolean);
+        console.log(`✅ Found ${ownerUserIds.length} owner(s) via shop_owners table`);
+      }
+
+      // Method B: fallback — user_profiles by email
+      if (ownerUserIds.length === 0 && shopData?.owner_email) {
         const { data: profileData } = await supabase
           .from('user_profiles')
           .select('user_id')
@@ -134,33 +171,41 @@ serve(async (req) => {
           .single();
 
         if (profileData?.user_id) {
-          console.log(`🔔 Sending ringing notification to owner: ${profileData.user_id}`);
-          
-          // Call the send-notification-by-userid function
-          await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-notification-by-userid`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-            },
-            body: JSON.stringify({
-              user_ids: [profileData.user_id],
-              title: '🆕 New Order Received!',
-              body: `${customerName} ordered ${productName || 'items'} for ₹${amount}.`,
-              data: {
-                type: 'new_order', // This triggers the OrderNotificationExtension in Android
-                order_id: order.id,
-                customer_name: customerName,
-                amount: (totalAmount || amount).toString(),
-                quantity: (quantity || 1).toString(),
-                delivery_type: deliveryType || 'pickup'
-              }
-            }),
-          });
+          ownerUserIds = [profileData.user_id];
+          console.log(`✅ Found owner via user_profiles fallback: ${profileData.user_id}`);
         }
       }
+
+      if (ownerUserIds.length > 0) {
+        console.log(`🔔 Sending NEW ORDER notification to ${ownerUserIds.length} owner(s)...`);
+        const ownerNotifRes = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-native-notification`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+          },
+          body: JSON.stringify({
+            userIds: ownerUserIds,
+            title: '🆕 New Order Received!',
+            body: `${customerName} ordered ${productName || 'items'} — ₹${totalAmount || amount}. Tap to confirm.`,
+            data: {
+              type: 'new_order',
+              order_id: order.id,
+              customer_name: customerName,
+              amount: (totalAmount || amount).toString(),
+              quantity: (quantity || 1).toString(),
+              delivery_type: deliveryType || 'pickup',
+              order_code: orderCode
+            }
+          }),
+        });
+        const ownerNotifText = await ownerNotifRes.text();
+        console.log(`📩 Owner notification result: ${ownerNotifRes.status} — ${ownerNotifText}`);
+      } else {
+        console.warn(`⚠️ No owner user IDs found for shop ${shopId}. Owner notification skipped.`);
+      }
     } catch (notifyError) {
-      console.error('⚠️ Failed to send ringing notification to shop owner:', notifyError);
+      console.error('⚠️ Notification error (non-fatal):', notifyError);
     }
 
     return new Response(

@@ -5,9 +5,6 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
 );
 
-const ONESIGNAL_API_KEY = Deno.env.get('ONESIGNAL_API_KEY') || '';
-const ONESIGNAL_APP_ID = Deno.env.get('ONESIGNAL_APP_ID') || '';
-const ONESIGNAL_API_URL = 'https://onesignal.com/api/v1/notifications';
 
 interface ChatNotification {
   id: string;
@@ -106,75 +103,55 @@ export async function processChatNotifications() {
 }
 
 /**
- * Send OneSignal notification for a chat message
+ * Send FCM notification for a chat message
  */
 async function sendNotificationForChat(notification: ChatNotification): Promise<boolean> {
   try {
-    console.log(`📤 Sending notification for shop ${notification.shop_id}...`);
+    console.log(`📤 Sending FCM for shop ${notification.shop_id}...`);
 
-    // If user_id is already in the notification, use it directly
     const userId = (notification as any).user_id;
-
     if (!userId) {
       console.warn('⚠️ No user_id in notification record');
       return false;
     }
 
     // Get shop details for context
-    const { data: shop, error: shopError } = await supabase
+    const { data: shop } = await supabase
       .from('shops')
-      .select('id, name')
+      .select('name')
       .eq('id', notification.shop_id)
       .single();
 
-    if (shopError) {
-      console.warn('⚠️ Shop not found:', shopError?.message);
-      // Continue anyway - we have the user_id
-    }
-
-    // Get shop owner's player ID from native_devices
-    const { data: deviceData, error: deviceError } = await supabase
-      .from('native_devices')
-      .select('player_id')
-      .eq('user_id', userId)
-      .single();
-
-    if (deviceError || !deviceData?.player_id) {
-      console.warn('⚠️ No player ID found for user:', deviceError?.message);
-      return false;
-    }
-
-    // Send OneSignal notification
-    const payload = {
-      app_id: ONESIGNAL_APP_ID,
-      include_player_ids: [deviceData.player_id],
-      headings: { en: `💬 New message from ${notification.sender_name}` },
-      contents: { en: notification.message.substring(0, 100) + (notification.message.length > 100 ? '...' : '') },
-      data: {
-        shop_id: notification.shop_id,
-        shop_name: shop?.name || 'Unknown Shop',
-        sender_name: notification.sender_name,
-        notification_type: 'chat_message',
-      },
-    };
-
-    console.log('📡 Calling OneSignal API...');
-    const response = await fetch(ONESIGNAL_API_URL, {
-      method: 'POST',
+    // TRIGGER FCM NOTIFICATION
+    console.log(`🔔 Sending FCM trigger to user ${userId}...`);
+    
+    const notifyUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/send-notification-by-userid`;
+    const resp = await fetch(notifyUrl, {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json; charset=utf-8',
-        'Authorization': `Basic ${ONESIGNAL_API_KEY}`,
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        user_ids: [userId],
+        title: `💬 New message from ${notification.sender_name}`,
+        body: notification.message.substring(0, 100) + (notification.message.length > 100 ? '...' : ''),
+        data: {
+          shop_id: notification.shop_id,
+          shop_name: shop?.name || 'Unknown Shop',
+          sender_name: notification.sender_name,
+          notification_type: 'chat_message',
+        }
+      }),
     });
 
-    if (!response.ok) {
-      const responseText = await response.text();
-      console.error(`❌ OneSignal API error: ${response.status} - ${responseText}`);
+    if (!resp.ok) {
+      const errorText = await resp.text();
+      console.error(`❌ FCM error: ${resp.status} - ${errorText}`);
       return false;
     }
 
-    console.log('✅ OneSignal API call successful');
+    console.log('✅ FCM notification sent successfully');
     return true;
   } catch (error) {
     console.error('❌ Error in sendNotificationForChat:', error);

@@ -1,22 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
-import { v4 as uuidv4 } from "https://deno.land/std@0.168.0/uuid/mod.ts";
 
-// Web OneSignal credentials
-const ONESIGNAL_WEB_APP_ID =
-  Deno.env.get("ONESIGNAL_WEB_APP_ID") ||
-  "8941b4b0-6aaf-412a-917b-b14541ea2ebb";
-const ONESIGNAL_WEB_API_KEY =
-  Deno.env.get("ONESIGNAL_WEB_API_KEY") ||
-  "os_v2_app_rfa3jmdkv5asvel3wfcud2roxoetzkvb57bulxfhsz3762x2hykzimh6vmdtqvvnbybc5xgjdjan5r2wsoe4qxayenvetehsv3byzda";
-
-// Native OneSignal credentials
-const ONESIGNAL_NATIVE_APP_ID =
-  Deno.env.get("ONESIGNAL_NATIVE_APP_ID") ||
-  "71048c28-503e-49e5-89b1-0de00ccdca4b";
-const ONESIGNAL_NATIVE_API_KEY =
-  "os_v2_app_oeciykcqhze6lcnrbxqaztokjnzez2oi76me4sv3y3p6gy5eu4kvf5qxzpuuraw25tybywnd3vg443ug2ln3os34jkyqd42llsnfjty";
-const ONESIGNAL_API_URL = "https://onesignal.com/api/v1/notifications";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "https://database.donedeals.shop";
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
@@ -51,231 +35,75 @@ serve(async (req: Request) => {
       );
     }
 
-    // Calculate when to send the reminder based on the absolute reminder time
-    let sendAfterTimestamp: number | undefined;
+    // Calculate sendAfterTimestamp
+    let sendAfterTimestamp: number = Math.floor(Date.now() / 1000);
     if (bookingDate && reminderTime) {
       try {
-        // Parse booking date (format: YYYY-MM-DD) and reminder time (format: HH:MM)
-        // User enters time in their local timezone, we need to convert to UTC for OneSignal
         const [year, month, day] = bookingDate.split('-').map(Number);
         const [reminderHour, reminderMinute] = reminderTime.split(':').map(Number);
-
         const userTimezoneOffsetHours = timezoneOffsetHours || 0;
-
-        // Create a date object at UTC midnight for the given date
-        // Then add the hours and minutes
-        // This ensures we're working with absolute dates
         const utcDate = new Date(Date.UTC(year, month - 1, day, reminderHour, reminderMinute, 0, 0));
-
-        // Convert from user's local time to UTC
-        // If user is in UTC+5:30 and enters 02:55, that's 21:25 UTC the previous day
-        // So we subtract the timezone offset to get the UTC time
         const offsetMs = userTimezoneOffsetHours * 60 * 60 * 1000;
-        const utcTimeMs = utcDate.getTime() - offsetMs;
-        sendAfterTimestamp = Math.floor(utcTimeMs / 1000);
-
-        // Calculate time difference for logging
-        const now = Math.floor(Date.now() / 1000);
-        const secondsFromNow = sendAfterTimestamp - now;
-        const hoursFromNow = Math.round(secondsFromNow / 3600 * 10) / 10;
-
-        // Log the actual UTC datetime for debugging
-        const utcDateTime = new Date(sendAfterTimestamp * 1000);
-        const localDateTime = new Date(utcDate.getTime());
-
-        console.log(`⏰ User timezone: UTC${userTimezoneOffsetHours > 0 ? '+' : ''}${userTimezoneOffsetHours}`);
-        console.log(`   Booking date: ${bookingDate}, Reminder time: ${reminderTime} (user local time)`);
-        console.log(`   User local datetime: ${localDateTime.toISOString().replace('Z', '')} (client timezone)`);
-        console.log(`   Converted to UTC timestamp: ${sendAfterTimestamp} (${utcDateTime.toISOString()})`);
-        console.log(`   Will be sent in: ${hoursFromNow} hours (${secondsFromNow} seconds from now)`);
-
-        // Validate the timestamp is in the future
-        if (secondsFromNow < 0) {
-          console.warn('⚠️ Calculated reminder time is in the past! Make sure to use future reminder times.');
-        } else if (secondsFromNow > 86400 * 30) {
-          console.warn('⚠️ Calculated reminder time is more than 30 days in the future');
-        }
+        sendAfterTimestamp = Math.floor((utcDate.getTime() - offsetMs) / 1000);
       } catch (err) {
         console.warn(`⚠️ Failed to calculate reminder send time:`, err);
-        sendAfterTimestamp = undefined;
       }
     }
 
-    // Check if player ID belongs to a native device
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-    let isNativeDevice = false;
-    let appId = ONESIGNAL_WEB_APP_ID;
-    let apiKey = ONESIGNAL_WEB_API_KEY;
+    // INSERT INTO alert_reminders TABLE FOR CRON PROCESSING
+    console.log(`💾 Saving reminder to alert_reminders table for booking: ${bookingId}`);
+    
+    // Resolve user_id from player_id if needed
+    const { data: userProfile } = await supabase
+      .from("user_profiles")
+      .select("user_id")
+      .eq("player_id", playerId)
+      .single();
+    
+    const targetUserId = userProfile?.user_id || playerId;
 
-    try {
-      const { data: nativeDevices, error } = await supabase
-        .from("native_devices")
-        .select("player_id")
-        .eq("player_id", playerId)
-        .limit(1);
-
-      if (!error && nativeDevices && nativeDevices.length > 0) {
-        isNativeDevice = true;
-        appId = ONESIGNAL_NATIVE_APP_ID;
-        apiKey = ONESIGNAL_NATIVE_API_KEY;
-        console.log(`📱 Player ID detected as native device, using native OneSignal app`);
-      } else {
-        console.log(`🌐 Player ID detected as web device, using web OneSignal app`);
-      }
-    } catch (err) {
-      console.warn(`⚠️ Failed to check device type, defaulting to web:`, err);
-      appId = ONESIGNAL_WEB_APP_ID;
-      apiKey = ONESIGNAL_WEB_API_KEY;
-    }
-
-    console.log(`📤 Sending reminder notification to player ${playerId}${sendAfterTimestamp ? ` (scheduled for ${sendAfterTimestamp})` : ''}`);
-    console.log(`📋 Booking details: bookingId=${bookingId}, userName=${userName}, shopName=${shopName}, timeSlot=${timeSlot}`);
-
-    const basePayload: Record<string, unknown> = {
-      app_id: appId,
-      include_player_ids: [playerId],
-      headings: { en: "🔔 Appointment Reminder" },
-      contents: {
-        en: `Are you ready to come to ${shopName} for your appointment at ${timeSlot}?`,
-      },
-      data: {
-        bookingId: bookingId,
-        tokenNumber: String(tokenNumber),
-        shopName: shopName,
-        userName: userName,
-        timeSlot: timeSlot,
-        shopId: shopId,
-        actionType: "reminder",
-      },
-      // Unified buttons for web and native
-      buttons: [
+    const { data: reminder, error: insertError } = await supabase
+      .from("alert_reminders")
+      .insert([
         {
-          id: `yes-${bookingId}`,
-          text: "Yes, I'm Coming",
-        },
-        {
-          id: `no-${bookingId}`,
-          text: "No, Cancel",
-        },
-      ],
-      // Channel configuration
-      isAndroid: true,
-      isIos: true,
-      isWebPush: true,
-      // Android heads-up notification settings with HIGHEST priority
-      android_importance: 5, // MAXIMUM (5) - Shows as heads-up notification with sound/vibration
-      android_priority: 10, // MAXIMUM (10) - For older Android versions
-      android_small_icon: "scissors", // 🔪 Custom scissor icon instead of default bell
-      // iOS settings
-      ios_sound: "default",
-      ios_badged: true,
-      // Web push settings
-      android_sound: "default",
-      // Additional high-priority settings
-      big_picture: true,
-      ios_critical_sound: true,
-    };
-
-    // Send 3 notifications at 10-second intervals
-    const notificationIntervalSeconds = 10;
-    const notificationCount = 3;
-    const sendResults = [];
-
-    for (let i = 0; i < notificationCount; i++) {
-      const payload = { ...basePayload } as Record<string, unknown>;
-
-      // Calculate send time for each notification
-      if (sendAfterTimestamp) {
-        // Add 10 seconds * i to the base timestamp
-        payload.send_after = sendAfterTimestamp + (notificationIntervalSeconds * i);
-        console.log(`🔔 Notification ${i + 1}/${notificationCount} scheduled for timestamp: ${payload.send_after}`);
-      }
-
-      // Generate a unique UUID for each notification (valid UUID format for OneSignal idempotency_key)
-      const uniqueNotificationId = uuidv4();
-      payload.external_id = uniqueNotificationId;
-
-      // Add unique content variations to ensure distinct notifications
-      const notificationHeading = i === 0
-        ? "🔔 Appointment Reminder"
-        : i === 1
-          ? "⏰ Appointment Reminder (Final Call)"
-          : "🚨 Last Reminder - Your Appointment Now!";
-
-      payload.headings = { en: notificationHeading };
-
-      // Add sequence info to the notification with original bookingId
-      payload.data = {
-        ...basePayload.data,
-        notificationSequence: `${i + 1}/3`,
-        reminderIndex: i + 1,
-        originalBookingId: bookingId,
-      };
-
-      try {
-        const response = await fetch(ONESIGNAL_API_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json; charset=utf-8",
-            Authorization: `Key ${apiKey}`,
-          },
-          body: JSON.stringify(payload),
-        });
-
-        const responseText = await response.text();
-
-        if (!response.ok) {
-          console.error(`❌ OneSignal API Error for notification ${i + 1}:`, responseText);
-          sendResults.push({
-            notificationNumber: i + 1,
-            success: false,
-            error: responseText,
-          });
-        } else {
-          console.log(`✅ Notification ${i + 1}/${notificationCount} sent successfully`);
-          sendResults.push({
-            notificationNumber: i + 1,
-            success: true,
-          });
+          booking_id: bookingId,
+          user_id: targetUserId,
+          shop_name: shopName,
+          token_number: tokenNumber,
+          user_name: userName,
+          time_slot: timeSlot,
+          shop_id: shopId,
+          scheduled_for: new Date(sendAfterTimestamp * 1000).toISOString(),
+          sent: false
         }
-      } catch (error) {
-        console.error(`❌ Error sending notification ${i + 1}:`, error);
-        sendResults.push({
-          notificationNumber: i + 1,
-          success: false,
-          error: String(error),
-        });
-      }
+      ])
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error("❌ Failed to save reminder to database:", insertError);
+      throw insertError;
     }
 
-    // Check if at least one notification was successful
-    const successCount = sendResults.filter((r) => r.success).length;
-    if (successCount === 0) {
-      return new Response(
-        JSON.stringify({
-          error: "Failed to send all reminder notifications",
-          details: sendResults,
-        }),
-        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders() } }
-      );
-    }
+    console.log("✅ Reminder saved to database successfully:", reminder.id);
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: `${successCount}/${notificationCount} reminder notifications sent successfully`,
-        details: sendResults,
+        message: "Reminder scheduled successfully in database",
+        reminderId: reminder.id,
+        scheduledFor: reminder.scheduled_for
       }),
       { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders() } }
     );
+
   } catch (error) {
-    console.error("Error:", error);
+    console.error("❌ Error:", error);
     return new Response(
-      JSON.stringify({ error: "Internal server error", details: error.message }),
+      JSON.stringify({ error: "Internal server error", details: String(error) }),
       { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders() } }
     );
   }
 });
-
-

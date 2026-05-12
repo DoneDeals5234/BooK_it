@@ -11,13 +11,33 @@ import type { Shop } from '@/lib/shops-storage';
 import type { Category } from '@/types/index';
 import { useNavigate, useParams } from 'react-router-dom';
 import { getAllCategories as getCategories } from '@/lib/supabase-categories';
+import { getCachedShops, getCachedCategories } from '@/lib/shops-cache';
+import { useDeviceBackButton } from '@/lib/use-device-back-button';
 
 export const CategoryShopsPage = () => {
   const navigate = useNavigate();
   const { categoryId } = useParams();
-  const [shops, setShops] = useState<Shop[]>([]);
-  const [category, setCategory] = useState<Category | null>(null);
-  const [loading, setLoading] = useState(true);
+  
+  // Handle device back button
+  useDeviceBackButton({
+    onBackPressed: () => {
+      navigate('/', { replace: true });
+    },
+    priority: 15
+  });
+  const [shops, setShops] = useState<Shop[]>(() => {
+    const cachedShops = getCachedShops();
+    return cachedShops ? getOrderedShops(cachedShops).filter(s => s.category === categoryId) : [];
+  });
+  const [category, setCategory] = useState<Category | null>(() => {
+    const cachedCategories = getCachedCategories();
+    return cachedCategories ? cachedCategories.find((c: any) => c.id === categoryId) || null : null;
+  });
+  const [loading, setLoading] = useState(() => {
+    const cachedShops = getCachedShops();
+    const cachedCategories = getCachedCategories();
+    return !(cachedShops && cachedCategories);
+  });
   const [favoriteRefresh, setFavoriteRefresh] = useState(0);
   const [shopReviews, setShopReviews] = useState<{ [shopId: string]: any[] }>({});
 
@@ -94,7 +114,7 @@ export const CategoryShopsPage = () => {
           <Button 
             variant="ghost" 
             size="icon" 
-            onClick={() => navigate(-1)}
+            onClick={() => navigate('/', { replace: true })}
             className="text-white hover:bg-white/10 rounded-full h-10 w-10 flex-shrink-0"
           >
             <ArrowLeft className="h-6 w-6" />

@@ -1,195 +1,205 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const ONESIGNAL_APP_ID =
-  Deno.env.get("ONESIGNAL_NATIVE_APP_ID") ||
-  "71048c28-503e-49e5-89b1-0de00ccdca4b";
-const ONESIGNAL_API_KEY =
-  "os_v2_app_oeciykcqhze6lcnrbxqaztokjnzez2oi76me4sv3y3p6gy5eu4kvf5qxzpuuraw25tybywnd3vg443ug2ln3os34jkyqd42llsnfjty";
-const ONESIGNAL_API_URL = "https://onesignal.com/api/v1/notifications";
-
+// ── Supabase config ──────────────────────────────────────────────────────────
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "https://database.donedeals.shop";
-const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UtZGVtbyIsImlhdCI6MTY0MTc2OTIwMCwiZXhwIjoxNzk5NTM1NjAwfQ.Qzqn3LHHNm0gW_QEQtwmhhisO0qLQnDApr9qDJ_rhfY";
 
 function corsHeaders() {
   return {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, apikey",
   };
 }
 
-serve(async (req: Request) => {
-  // Handle preflight CORS
-  if (req.method === "OPTIONS") {
-    return new Response("OK", { status: 200, headers: corsHeaders() });
+// ── Firebase FCM Service Account Loading ─────────────────────────────────────
+let FCM_SERVICE_ACCOUNT: any = null;
+let FCM_PROJECT_ID = "barber-app-6993a";
+
+async function loadFcmServiceAccount() {
+  if (FCM_SERVICE_ACCOUNT) return FCM_SERVICE_ACCOUNT;
+  try {
+    const HARDCODED_B64 = "ewogICJ0eXBlIjogInNlcnZpY2VfYWNjb3VudCIsCiAgInByb2plY3RfaWQiOiAiYmFyYmVyLWFwcC02OTkzYSIsCiAgInByaXZhdGVfa2V5X2lkIjogIjlmYzg3MDI3NjAyOGE4ZjE3NzRkMGJiNGI3MDA0MWVhNmI3NjJiMzkiLAogICJwcml2YXRlX2tleSI6ICItLS0tLUJFR0lOIFBSSVZBVEUgS0VZLS0tLS1cbk1JSUV2UUlCQURBTkJna3Foa2lHOXcwQkFRRUZBQVNDQktjd2dnU2pBZ0VBQW9JQkFRQ3BhMkJueXhqekx1elhcbnN5SElUM1hVejc0UkpvVkRjNmhYc3UvZWFuUHBYdERoSUV6Y0FiVjNtSTVpWk4zYkJaTndyeG54SEVlc3A1THBcbmxpZnFmU2xyY0RYZkZKVmt2K2cvVGx2ZlVIZ2lMZjN4MDV2Y0JxYmNLNmJSZjZmdENhU0FFSGZTQUJvQzJGZGRcbkhiUUpuTi9iRktNMmw3b3pKZHM4SzNxMXN5bk8rc0s3OCt4emNtMnhYMUpzdHRHT092MkxIN3kwNkdjS0hLWUNcbmU5UkF2Z3NhR09YZDRzMHJxNGdmZ1ZrN2k5RnJVd0RIeHYzRFNQM1VCR28yQ1FLR21EVElSNUpZMkluQU1yMS9cbmQzL1dheFozVjVDS3lGdXNmSmtMOFBvOThrTlJwdHBzRHU3TVJpb3VpY2dSOHBOREtRTHgyL2FSbGd6NGJhMFRcbkZ3V2NWN3B4QWdNQkFBRUNnZ0VBRXJTc1hFbHNZODFXa1NwU0hJL0pic25STG91V1F6Qk44Z0Ryd3g3MTFWcUdcbnJaU25aOU00ZWcvNkNKc2ljOEJWMnljNk1nanhVUHJmbWJMZWpXRnNaVlJxWGtzamc1QTgwR0NTZkVHaVFnUFpcbitnMW5OQS8zOUc5TlordzBXbE9xT2dtWGNUUlpxdDdBSnFQVThRckZIS2RXcmZ4cXJxTUxaY1ZYTXlDcENSVXdcbnlyVm1YS1R5OEdTSEZFZFZqdFZ6dE12LzV5L2NXZU9OUHJsdGRaRENHN0VSdHlZb1JtR0dVR0VqUURlbVlyd0FcbjFGRHN2MUs3VndRaEFab2Y2U0ZGYkwwU0RzWktSeWc0YlhTdHkzSVNrQ2crVXgrVHE5emxiVnorYi84cVhTR0FcbmJIUlg4Ui90dWprTldFc1IrRDE2VTMxRlV4MEE0eEhPVkJIWm9WaGR3UUtCZ1FEWmxkZ3RTaWsyY3NRNzlQVUNcbjd3K1RzVERVMFZRMTAxM3grU1ZpeUFHL0U5NjdVQUJBYlpkMnhBSzRHalUveXRKSHJ0bndFVFNaOGxKeGtkTExcbkNKTlF5TWpWbDZOMDZURXBYUWwrenc0Z3FFczBMSVJYSS9ad1k1ZlZuZmhrOXpvaTV3bnp2NWlVQ2l3SzUwNU5cbk1od1NWbjdDb2F2b2lOK3ZRNG9wbC92aUxRS0JnUURIVkpiVG04dTFBT3llYjFLQytlcGVUeDRsbmo2NzFoZ0hcbmwxTG1IWVdLMTBZQThQTWdtek8rRkZVSmhTVVdrUDVERUJjTHRLVTArbnFqWTIzSFRDb0V3aUdGa2NtaWNlQldcblgvTU41dllDQ3FzTmJPcDdTSzVOcDQ0VG02eUVuMWpaampEV0QrLy9XbE9RcnZGMTdFYTZnNXFYYUl0VDF6Q0tcbjFhRUpNRXlYMVFLQmdRQ051cVpxc2REd2o0YzFTdFZCeVBpTGlySzFIWGxONmxWYVphQ3RuSHhPdTZHc3YycTZcbmpPaEpTMW8rRTR3MTltWk1uUitHMlo0NjNQWkkxZVRKcmRkUG1zbi9IMXd3cmlrQXVZS1M0RXBpaVYwYktoZzJcbkxzMjYzWlNzWjg3Qjdhd255ZmpZbGlmTDNtaGIzZGxLUFdhOXB5dkFtZERCa2s2cCtrT0gzbUVMTFFLQmdBK1pcbmppaEhkQnpaVXF0Zm1QeUpKSTkyNzZ3UUEyYmQ3WW1DalVsWEhDRnVrWnIzUUgvWHhhZmxuWFllUm5YS3FTdUVcbmNkbEhyUHBGZEIyZlpYTUlnZTFYYUJvMCs2dkw3N3V5ektuVTNvSHdaY3lxTG51eGgzcXFWMU12aHNQbVdLVEdcbkhRcFR1dnVvRFF3d3ROTCt4OVpIQUcxREVFeGlkZmtYbVAvSUdPWjFBb0dBR1dkVU81dnR5N2pzQ0NOeVMxZFRcbnhUR1BERmFPOU9CbUk2RVVGTFREOTl0cW91YUZML0s4ZVU4Sks4ZGE2ZFF3YzR4clJudE9iRzRNV1hJUnR1eUdcbmpBWVE5dmx5VnMrdjV5WFdsUWE1WDI3ZHN4cmdEWUU2OFE2bmFIdm5WL2NWemRZR0kvSUNzMWs1K1FoMHJwTm5cbmgycSttNTBJZUZMYlcvS0V1WWhmNGtNPVxuLS0tLS1FTkQgUFJJVkFURSBLRVktLS0tLVxuIiwKICAiY2xpZW50X2VtYWlsIjogImZpcmViYXNlLWFkbWluc2RrLWZic3ZjQGJhcmJlci1hcHAtNjk5M2EuaWFtLmdzZXJ2aWNlYWNjb3VudC5jb20iLAogICJjbGllbnRfaWQiOiAiMTA5MzQ3NTc1NDY3MjM5Nzg5NDgyIiwKICAiYXV0aF91cmkiOiAiaHR0cHM6Ly9hY2NvdW50cy5nb29nbGUuY29tL28vb2F1dGgyL2F1dGgiLAogICJ0b2tlbl91cmkiOiAiaHR0cHM6Ly9vYXV0aDIuZ29vZ2xlYXBpcy5jb20vdG9rZW4iLAogICJhdXRoX3Byb3ZpZGVyX3g1MDlfY2VydF91cmwiOiAiaHR0cHM6Ly93d3cuZ29vZ2xlYXBpcy5jb20vb2F1dGgyL3YxL2NlcnRzIiwKICAiY2xpZW50X3g1MDlfY2VydF91cmwiOiAiaHR0cHM6Ly93d3cuZ29vZ2xlYXBpcy5jb20vcm9ib3QvdjEvbWV0YWRhdGEveDUwOS9maXJlYmFzZS1hZG1pbnNkay1mYnN2YyU0MGJhcmJlci1hcHAtNjk5M2EuaWFtLmdzZXJ2aWNlYWNjb3VudC5jb20iLAogICJ1bml2ZXJzZV9kb21haW4iOiAiZ29vZ2xlYXBpcy5jb20iCn0K";
+
+    const b64 = HARDCODED_B64 || Deno.env.get("FCM_SERVICE_ACCOUNT_B64");
+    if (b64) {
+      FCM_SERVICE_ACCOUNT = JSON.parse(atob(b64));
+      FCM_PROJECT_ID = FCM_SERVICE_ACCOUNT.project_id || FCM_PROJECT_ID;
+      return FCM_SERVICE_ACCOUNT;
+    }
+    throw new Error("Could not load Firebase Service Account.");
+  } catch (e) {
+    console.error("❌ Failed to load FCM service account:", e);
+    throw e;
+  }
+}
+
+async function getFcmAccessToken(): Promise<string> {
+  const account = await loadFcmServiceAccount();
+  const now = Math.floor(Date.now() / 1000);
+  const header = { alg: "RS256", typ: "JWT" };
+  const payload = {
+    iss: account.client_email,
+    scope: "https://www.googleapis.com/auth/firebase.messaging",
+    aud: account.token_uri,
+    iat: now,
+    exp: now + 3600,
+  };
+
+  const enc = new TextEncoder();
+  function base64url(data: Uint8Array): string {
+    let binary = '';
+    for (let i = 0; i < data.length; i++) binary += String.fromCharCode(data[i]);
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
   }
 
-  if (req.method !== "POST") {
-    return new Response(JSON.stringify({ error: "Method not allowed" }), {
-      status: 405,
-      headers: { "Content-Type": "application/json", ...corsHeaders() },
+  const headerB64 = base64url(enc.encode(JSON.stringify(header)));
+  const payloadB64 = base64url(enc.encode(JSON.stringify(payload)));
+  const signingInput = `${headerB64}.${payloadB64}`;
+
+  const pemKey = account.private_key;
+  const pemBody = pemKey.replace(/-----BEGIN PRIVATE KEY-----/, '').replace(/-----END PRIVATE KEY-----/, '').replace(/\n/g, '');
+  const binaryKey = Uint8Array.from(atob(pemBody), (c) => c.charCodeAt(0));
+
+  const cryptoKey = await crypto.subtle.importKey("pkcs8", binaryKey, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"]);
+  const signature = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", cryptoKey, enc.encode(signingInput));
+  const jwt = `${signingInput}.${base64url(new Uint8Array(signature))}`;
+
+  const tokenRes = await fetch(account.token_uri, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
+  });
+
+  const tokenData = await tokenRes.json();
+  return tokenData.access_token;
+}
+
+async function sendFcmNotification(fcmToken: string, title: string, body: string, data: Record<string, string> = {}) {
+  try {
+    const accessToken = await getFcmAccessToken();
+    const FCM_API_URL = `https://fcm.googleapis.com/v1/projects/${FCM_PROJECT_ID}/messages:send`;
+
+    const message = {
+      message: {
+        token: fcmToken,
+        notification: { title, body },
+        android: {
+          priority: "HIGH",
+          notification: { sound: "default", channel_id: "default", click_action: "OPEN_ACTIVITY" },
+        },
+        data,
+      },
+    };
+
+    const res = await fetch(FCM_API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify(message),
     });
+
+    return { success: res.ok, status: res.status, response: await res.text() };
+  } catch (e) {
+    return { success: false, status: 0, response: String(e) };
   }
+}
+
+serve(async (req: Request) => {
+  if (req.method === "OPTIONS") return new Response("OK", { status: 200, headers: corsHeaders() });
 
   try {
     const body = await req.json();
-    const {
-      include_player_ids,
-      playerIds,
-      title,
-      body: messageBody,
-      data,
-      image,
-      big_picture,
-      actionButtons,
-      excludeCurrentUser,
-      currentUserPlayerId,
-      userIds,
-    } = body;
+    const { userIds, playerIds, title, body: messageBody, data: dataIn } = body;
 
-    console.log("📱 Native notification request received:", {
-      title,
-      messageBody,
-      playerIds: playerIds?.length || 0,
-      userIds: userIds?.length || 0,
-      hasData: !!data,
-      excludeCurrentUser,
+    console.log("📱 FCM notification request received:", { title, userIdsCount: userIds?.length });
+
+    // Initialize Supabase client with SERVICE ROLE to bypass RLS
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+      auth: { autoRefreshToken: false, persistSession: false }
     });
+    
+    let fcmTokens: string[] = [];
 
-    let finalPlayerIds = include_player_ids || playerIds || [];
-
-    // If userIds provided, fetch their player IDs from native_devices table
-    if (userIds && userIds.length > 0) {
-      console.log("🔍 Fetching player IDs for userIds:", userIds);
-      const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-
-      const { data: nativeDevices, error: fetchError } = await supabase
+    // Fetch tokens by userId
+    if (userIds?.length > 0) {
+      console.log(`🔍 Fetching FCM tokens for userIds: ${userIds.join(', ')}`);
+      const { data: devices, error: devError } = await supabase
         .from("native_devices")
-        .select("player_id")
+        .select("fcm_token")
         .in("user_id", userIds)
-        .not("player_id", "is", null);
+        .not("fcm_token", "is", null);
+      
+      if (devError) console.error("❌ Error fetching tokens by userId:", devError);
+      if (devices) fcmTokens = [...new Set([...fcmTokens, ...devices.map((d: any) => d.fcm_token)])];
+    }
 
-      if (fetchError) {
-        console.error("❌ Error fetching native devices:", fetchError);
-      } else {
-        const fetchedPlayerIds = nativeDevices
-          .map((d: any) => d.player_id)
-          .filter((id): id is string => id !== null && id !== undefined);
-        finalPlayerIds = [...new Set([...finalPlayerIds, ...fetchedPlayerIds])];
-        console.log(`📱 Found ${fetchedPlayerIds.length} native device(s) for these users`);
+    // Fetch tokens by playerId (compatibility)
+    if (playerIds?.length > 0) {
+      const { data: devices } = await supabase.from("native_devices").select("fcm_token").in("player_id", playerIds).not("fcm_token", "is", null);
+      if (devices) fcmTokens = [...new Set([...fcmTokens, ...devices.map((d: any) => d.fcm_token)])];
+    }
+
+    if (fcmTokens.length === 0) {
+      console.warn("⚠️ No FCM tokens found for recipients.");
+      return new Response(JSON.stringify({ success: false, error: "No tokens found", userIds }), { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders() } });
+    }
+
+    const fcmData: Record<string, string> = {};
+    if (dataIn) Object.entries(dataIn).forEach(([k, v]) => { fcmData[k] = String(v); });
+
+    // Use image from data if provided, or a dedicated image field
+    const imageUrl = dataIn?.imageUrl || dataIn?.image;
+
+    async function sendFcmWithImage(token: string) {
+      try {
+        const accessToken = await getFcmAccessToken();
+        const FCM_API_URL = `https://fcm.googleapis.com/v1/projects/${FCM_PROJECT_ID}/messages:send`;
+        
+        const messagePayload: any = {
+          message: {
+            token: token,
+            notification: { title, body: messageBody },
+            android: {
+              priority: "HIGH",
+              notification: { 
+                sound: "default", 
+                channel_id: "default", 
+                click_action: "OPEN_ACTIVITY"
+              },
+            },
+            data: fcmData,
+          },
+        };
+
+        // Add image to notification if provided
+        if (imageUrl) {
+          messagePayload.message.notification.image = imageUrl;
+          // Also add to data for flexibility
+          messagePayload.message.data.image = imageUrl;
+        }
+
+        const res = await fetch(FCM_API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+          body: JSON.stringify(messagePayload),
+        });
+
+        return { success: res.ok, status: res.status, response: await res.text() };
+      } catch (e) {
+        return { success: false, status: 0, response: String(e) };
       }
     }
 
-    // Exclude current user's device if requested
-    if (excludeCurrentUser && currentUserPlayerId && Array.isArray(finalPlayerIds)) {
-      const originalLength = finalPlayerIds.length;
-      finalPlayerIds = finalPlayerIds.filter((id) => id !== currentUserPlayerId);
-      if (finalPlayerIds.length < originalLength) {
-        console.log("⏭️ Excluded current user from notification");
-      }
-    }
+    console.log(`🔥 Sending FCM to ${fcmTokens.length} devices...`);
+    const results = await Promise.all(fcmTokens.map(token => sendFcmWithImage(token)));
 
-    if (!finalPlayerIds || finalPlayerIds.length === 0) {
-      console.error("❌ No player IDs provided for native devices");
-      return new Response(
-        JSON.stringify({ error: "playerIds, userIds, or include_player_ids required" }),
-        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders() } }
-      );
-    }
+    const successCount = results.filter(r => r.success).length;
+    console.log(`✅ FCM results: ${successCount}/${fcmTokens.length} successful`);
 
-    if (!title || !messageBody) {
-      console.error("❌ Missing title or message body");
-      return new Response(
-        JSON.stringify({ error: "title and body are required" }),
-        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders() } }
-      );
-    }
-
-    const payload: Record<string, unknown> = {
-      app_id: ONESIGNAL_APP_ID,
-      headings: { en: title },
-      contents: { en: messageBody },
-      include_player_ids: finalPlayerIds,
-      // 🔔 Android: Heads-up notification settings
-      android_importance: 5, // HIGH - Shows as heads-up notification (critical for heads-up!)
-      android_priority: 10, // For older Android versions
-      android_small_icon: "scissors", // 🔪 Custom scissor icon instead of default bell
-      // 🔔 iOS: High priority for immediate delivery
-      ios_badged: true,
-      ios_sound: "default",
-      ios_priority: 10, // HIGH priority for iOS
-      mutable_content: true, // Allow iOS apps to modify the notification (needed for rich media)
-    };
-
-    if (data) {
-      payload.data = data;
-      console.log("📦 Attached data:", data);
-    }
-    // Images: Use for both small inline icon and big expanded picture
-    if (image) {
-      payload.image = image;
-      payload.large_icon = image; // 🔪 Small inline image (Android)
-    }
-    if (big_picture) {
-      payload.big_picture = big_picture;
-      if (!image) {
-        payload.large_icon = big_picture; // 🔪 Use as small icon if no separate image provided
-      }
-    }
-    if (actionButtons?.length) {
-      // For native (Android/iOS), use buttons format
-      payload.buttons = actionButtons;
-      console.log("🔘 Native action buttons:", actionButtons);
-    }
-
-    console.log("📡 Sending payload to OneSignal for native devices (with HIGH importance for heads-up):", JSON.stringify(payload, null, 2));
-
-    const response = await fetch(ONESIGNAL_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json; charset=utf-8",
-        Authorization: `Key ${ONESIGNAL_API_KEY}`,
-      },
-      body: JSON.stringify(payload),
-    });
-
-    const responseText = await response.text();
-
-    console.log(`📋 OneSignal response status: ${response.status}`);
-    console.log(`📋 OneSignal response: ${responseText}`);
-
-    if (!response.ok) {
-      console.error("❌ OneSignal API Error:", responseText);
-      return new Response(
-        JSON.stringify({
-          error: "Failed to send notification",
-          details: responseText,
-        }),
-        { status: response.status, headers: { "Content-Type": "application/json", ...corsHeaders() } }
-      );
-    }
-
-    console.log("✅ Native notification sent successfully");
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message: "Native notification sent successfully",
-        playerIdsCount: finalPlayerIds.length,
-      }),
-      { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders() } }
-    );
+    return new Response(JSON.stringify({ success: true, successCount, totalCount: fcmTokens.length }), { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders() } });
   } catch (error) {
-    console.error("❌ Error:", error);
-    return new Response(
-      JSON.stringify({
-        error: "Internal server error",
-        details: error instanceof Error ? error.message : String(error),
-      }),
-      { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders() } }
-    );
+    console.error("❌ Edge Function Error:", error);
+    return new Response(JSON.stringify({ error: String(error) }), { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders() } });
   }
 });
-
-
-

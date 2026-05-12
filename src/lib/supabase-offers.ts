@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { ShopOffer } from '@/types';
-import { sendBroadcastNotification } from '@/lib/onesignal-messaging';
+import { sendBroadcastNotification } from '@/lib/native-notifications';
+
 
 // Get active offers for a shop (for customer view)
 export const getActiveOffersByShopId = async (shopId: string): Promise<ShopOffer[]> => {
@@ -149,11 +150,15 @@ export const addOffer = async (
 
   // Send broadcast notification to all users about the new offer
   try {
-    sendBroadcastNotification(
-      `New Offer: ${title}`,
-      description || 'Check out this new deal!',
+    const discountText = discountPercentage 
+      ? `${discountPercentage}% off!` 
+      : discountAmount ? `₹${discountAmount} off!` : 'Great deal!';
+    await sendBroadcastNotification(
+      `🏷️ New Offer: ${title}`,
+      `${discountText} ${description || 'Check it out now!'}`,
       imageUrl,
-      shopId
+      shopId,
+      { route: '/bazaar', type: 'new_offer', shop_id: shopId }
     );
   } catch (notifyError) {
     console.warn('⚠️ Failed to send broadcast notification for new offer:', notifyError);

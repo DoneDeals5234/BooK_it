@@ -1,5 +1,5 @@
 import { getNativeShopOwnersByShopId, getAllNativeShopOwners } from '@/lib/supabase-native-shop-owners';
-import { sendNotificationByUserId } from '@/lib/onesignal-messaging';
+import { sendNativeNotification } from '@/lib/native-notifications';
 
 interface ChatNotificationContext {
   shopId: string;
@@ -12,6 +12,7 @@ interface WorldChatNotificationContext {
   senderName: string;
   message: string;
   senderEmail?: string;
+  imageUrl?: string;
 }
 
 interface ProfileChatNotificationContext {
@@ -23,17 +24,13 @@ interface ProfileChatNotificationContext {
 
 /**
  * Send temporary chat notification to shop owner
- * Uses sendNotificationByUserId for direct OneSignal delivery
  */
 export async function sendTemporaryChatNotification(
   context: ChatNotificationContext
 ): Promise<{ success: boolean; method: string }> {
   try {
     console.log('🔔 Sending temporary chat notification...');
-    console.log(`📊 Context:`, { shopId: context.shopId, senderName: context.senderName });
-
-    // Get shop owner's user ID from native_shop_owners table
-    console.log(`🔍 Looking up shop owner for shop ${context.shopId}...`);
+    
     const shopOwners = await getNativeShopOwnersByShopId(context.shopId);
 
     if (!shopOwners || shopOwners.length === 0) {
@@ -41,15 +38,9 @@ export async function sendTemporaryChatNotification(
       return { success: false, method: 'none' };
     }
 
-    const shopOwner = shopOwners[0]; // Get first owner
-    const userId = shopOwner.userId;
+    const userIds = shopOwners.map(o => o.userId);
 
-    console.log(`✅ Found shop owner with user ID: ${userId}`);
-
-    // Send notification directly via sendNotificationByUserId
-    console.log(`📱 Sending OneSignal notification to user ${userId}...`);
-    
-    const notificationSuccess = await sendNotificationByUserId([userId], {
+    const notificationSuccess = await sendNativeNotification(userIds, {
       title: `💬 New message from ${context.senderName}`,
       body: context.message.substring(0, 100) + (context.message.length > 100 ? '...' : ''),
       data: {
@@ -60,10 +51,8 @@ export async function sendTemporaryChatNotification(
     });
 
     if (notificationSuccess) {
-      console.log('✅ SUCCESS: OneSignal notification sent directly');
-      return { success: true, method: 'OneSignal' };
+      return { success: true, method: 'FCM' };
     } else {
-      console.warn('⚠️ FAILED: Direct notification failed');
       return { success: false, method: 'none' };
     }
   } catch (error) {
@@ -74,17 +63,13 @@ export async function sendTemporaryChatNotification(
 
 /**
  * Send world chat notification to ALL shop owners
- * Gets all unique shop owners and notifies them of the world chat message
  */
 export async function sendWorldChatNotification(
   context: WorldChatNotificationContext
 ): Promise<{ success: boolean; method: string }> {
   try {
     console.log('🌍 Sending world chat notification to all shop owners...');
-    console.log(`📊 Context:`, { senderName: context.senderName });
-
-    // Get all shop owners from the entire system
-    console.log(`🔍 Looking up all shop owners...`);
+    
     const allShopOwners = await getAllNativeShopOwners();
 
     if (!allShopOwners || allShopOwners.length === 0) {
@@ -92,7 +77,6 @@ export async function sendWorldChatNotification(
       return { success: false, method: 'none' };
     }
 
-    // Extract unique user IDs to avoid duplicate notifications
     const userIds = Array.from(new Set(allShopOwners.map(owner => owner.userId).filter(Boolean)));
 
     if (userIds.length === 0) {
@@ -100,25 +84,19 @@ export async function sendWorldChatNotification(
       return { success: false, method: 'none' };
     }
 
-    console.log(`✅ Found ${userIds.length} unique shop owner(s)`);
-
-    // Send notification to all shop owners via sendNotificationByUserId
-    console.log(`📱 Sending OneSignal notification to ${userIds.length} shop owner(s)...`);
-
-    const notificationSuccess = await sendNotificationByUserId(userIds, {
+    const notificationSuccess = await sendNativeNotification(userIds, {
       title: `🌍 New World Chat from ${context.senderName}`,
       body: context.message.substring(0, 100) + (context.message.length > 100 ? '...' : ''),
       data: {
         type: 'world_chat',
         senderName: context.senderName,
+        imageUrl: context.imageUrl,
       },
     });
 
     if (notificationSuccess) {
-      console.log(`✅ SUCCESS: OneSignal notifications sent to ${userIds.length} shop owner(s)`);
-      return { success: true, method: 'OneSignal' };
+      return { success: true, method: 'FCM' };
     } else {
-      console.warn('⚠️ FAILED: Direct notification failed');
       return { success: false, method: 'none' };
     }
   } catch (error) {
@@ -129,16 +107,13 @@ export async function sendWorldChatNotification(
 
 /**
  * Send profile chat notification to a specific user
- * Sends a notification when someone sends a direct message to a user's profile
  */
 export async function sendProfileChatNotification(
   context: ProfileChatNotificationContext
 ): Promise<{ success: boolean; method: string }> {
   try {
     console.log('💬 Sending profile chat notification...');
-    console.log(`📊 Context:`, { profileUserId: context.profileUserId, senderName: context.senderName });
-
-    // The profileUserId is the user ID of the profile owner
+    
     const userId = context.profileUserId;
 
     if (!userId) {
@@ -146,12 +121,7 @@ export async function sendProfileChatNotification(
       return { success: false, method: 'none' };
     }
 
-    console.log(`✅ Found profile user with ID: ${userId}`);
-
-    // Send notification directly via sendNotificationByUserId
-    console.log(`📱 Sending OneSignal notification to user ${userId}...`);
-
-    const notificationSuccess = await sendNotificationByUserId([userId], {
+    const notificationSuccess = await sendNativeNotification([userId], {
       title: `💬 New message from ${context.senderName}`,
       body: context.message.substring(0, 100) + (context.message.length > 100 ? '...' : ''),
       data: {
@@ -162,10 +132,8 @@ export async function sendProfileChatNotification(
     });
 
     if (notificationSuccess) {
-      console.log('✅ SUCCESS: OneSignal notification sent to profile user');
-      return { success: true, method: 'OneSignal' };
+      return { success: true, method: 'FCM' };
     } else {
-      console.warn('⚠️ FAILED: Direct notification failed');
       return { success: false, method: 'none' };
     }
   } catch (error) {

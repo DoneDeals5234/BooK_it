@@ -10,8 +10,8 @@ android {
         applicationId "com.bookbarber.app"
         minSdkVersion 23
         targetSdkVersion 35
-        versionCode 132
-        versionName "0.0.132"
+        versionCode 158
+        versionName "0.0.158"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
@@ -68,8 +68,6 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
 
-    // OneSignal SDK 5.x
-    implementation 'com.onesignal:OneSignal:5.1.38'
 
     // Firebase BOM (Automanage versions)
     implementation platform('com.google.firebase:firebase-bom:34.6.0')

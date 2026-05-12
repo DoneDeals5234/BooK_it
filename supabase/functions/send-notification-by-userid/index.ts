@@ -1,12 +1,98 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const ONESIGNAL_APP_ID =
-  Deno.env.get("ONESIGNAL_NATIVE_APP_ID") ||
-  "71048c28-503e-49e5-89b1-0de00ccdca4b";
-const ONESIGNAL_API_KEY =
-  "os_v2_app_oeciykcqhze6lcnrbxqaztokjnzez2oi76me4sv3y3p6gy5eu4kvf5qxzpuuraw25tybywnd3vg443ug2ln3os34jkyqd42llsnfjty";
-const ONESIGNAL_API_URL = "https://onesignal.com/api/v1/notifications";
+// ── Firebase FCM Service Account Loading ─────────────────────────────────────
+let FCM_SERVICE_ACCOUNT: any = null;
+let FCM_PROJECT_ID = "barber-app-6993a";
+
+async function loadFcmServiceAccount() {
+  if (FCM_SERVICE_ACCOUNT) return FCM_SERVICE_ACCOUNT;
+  try {
+    const HARDCODED_B64 = "ewogICJ0eXBlIjogInNlcnZpY2VfYWNjb3VudCIsCiAgInByb2plY3RfaWQiOiAiYmFyYmVyLWFwcC02OTkzYSIsCiAgInByaXZhdGVfa2V5X2lkIjogIjlmYzg3MDI3NjAyOGE4ZjE3NzRkMGJiNGI3MDA0MWVhNmI3NjJiMzkiLAogICJwcml2YXRlX2tleSI6ICItLS0tLUJFR0lOIFBSSVZBVEUgS0VZLS0tLS1cbk1JSUV2UUlCQURBTkJna3Foa2lHOXcwQkFRRUZBQVNDQktjd2dnU2pBZ0VBQW9JQkFRQ3BhMkJueXhqekx1elhcbnN5SElUM1hVejc0UkpvVkRjNmhYc3UvZWFuUHBYdERoSUV6Y0FiVjNtSTVpWk4zYkJaTndyeG54SEVlc3A1THBcbmxpZnFmU2xyY0RYZkZKVmt2K2cvVGx2ZlVIZ2lMZjN4MDV2Y0JxYmNLNmJSZjZmdENhU0FFSGZTQUJvQzJGZGRcbkhiUUpuTi9iRktNMmw3b3pKZHM4SzNxMXN5bk8rc0s3OCt4emNtMnhYMUpzdHRHT092MkxIN3kwNkdjS0hLWUNcbmU5UkF2Z3NhR09YZDRzMHJxNGdmZ1ZrN2k5RnJVd0RIeHYzRFNQM1VCR28yQ1FLR21EVElSNUpZMkluQU1yMS9cbmQzL1dheFozVjVDS3lGdXNmSmtMOFBvOThrTlJwdHBzRHU3TVJpb3VpY2dSOHBOREtRTHgyL2FSbGd6NGJhMFRcbkZ3V2NWN3B4QWdNQkFBRUNnZ0VBRXJTc1hFbHNZODFXa1NwU0hJL0pic25STG91V1F6Qk44Z0Ryd3g3MTFWcUdcbnJaU25aOU00ZWcvNkNKc2ljOEJWMnljNk1nanhVUHJmbWJMZWpXRnNaVlJxWGtzamc1QTgwR0NTZkVHaVFnUFpcbitnMW5OQS8zOUc5TlordzBXbE9xT2dtWGNUUlpxdDdBSnFQVThRckZIS2RXcmZ4cXJxTUxaY1ZYTXlDcENSVXdcbnlyVm1YS1R5OEdTSEZFZFZqdFZ6dE12LzV5L2NXZU9OUHJsdGRaRENHN0VSdHlZb1JtR0dVR0VqUURlbVlyd0FcbjFGRHN2MUs3VndRaEFab2Y2U0ZGYkwwU0RzWktSeWc0YlhTdHkzSVNrQ2crVXgrVHE5emxiVnorYi84cVhTR0FcbmJIUlg4Ui90dWprTldFc1IrRDE2VTMxRlV4MEE0eEhPVkJIWm9WaGR3UUtCZ1FEWmxkZ3RTaWsyY3NRNzlQVUNcbjd3K1RzVERVMFZRMTAxM3grU1ZpeUFHL0U5NjdVQUJBYlpkMnhBSzRHalUveXRKSHJ0bndFVFNaOGxKeGtkTExcbkNKTlF5TWpWbDZOMDZURXBYUWwrenc0Z3FFczBMSVJYSS9ad1k1ZlZuZmhrOXpvaTV3bnp2NWlVQ2l3SzUwNU5cbk1od1NWbjdDb2F2b2lOK3ZRNG9wbC92aUxRS0JnUURIVkpiVG04dTFBT3llYjFLQytlcGVUeDRsbmo2NzFoZ0hcbmwxTG1IWVdLMTBZQThQTWdtek8rRkZVSmhTVVdrUDVERUJjTHRLVTArbnFqWTIzSFRDb0V3aUdGa2NtaWNlQldcblgvTU41dllDQ3FzTmJPcDdTSzVOcDQ0VG02eUVuMWpaampEV0QrLy9XbE9RcnZGMTdFYTZnNXFYYUl0VDF6Q0tcbjFhRUpNRXlYMVFLQmdRQ051cVpxc2REd2o0YzFTdFZCeVBpTGlySzFIWGxONmxWYVphQ3RuSHhPdTZHc3YycTZcbmpPaEpTMW8rRTR3MTltWk1uUitHMlo0NjNQWkkxZVRKcmRkUG1zbi9IMXd3cmlrQXVZS1M0RXBpaVYwYktoZzJcbkxzMjYzWlNzWjg3Qjdhd255ZmpZbGlmTDNtaGIzZGxLUFdhOXB5dkFtZERCa2s2cCtrT0gzbUVMTFFLQmdBK1pcbmppaEhkQnpaVXF0Zm1QeUpKSTkyNzZ3UUEyYmQ3WW1DalVsWEhDRnVrWnIzUUgvWHhhZmxuWFllUm5YS3FTdUVcbmNkbEhyUHBGZEIyZlpYTUlnZTFYYUJvMCs2dkw3N3V5ektuVTNvSHdaY3lxTG51eGgzcXFWMU12aHNQbVdLVEdcbkhRcFR1dnVvRFF3d3ROTCt4OVpIQUcxREVFeGlkZmtYbVAvSUdPWjFBb0dBR1dkVU81dnR5N2pzQ0NOeVMxZFRcbnhUR1BERmFPOU9CbUk2RVVGTFREOTl0cW91YUZML0s4ZVU4Sks4ZGE2ZFF3YzR4clJudE9iRzRNV1hJUnR1eUdcbmpBWVE5dmx5VnMrdjV5WFdsUWE1WDI3ZHN4cmdEWUU2OFE2bmFIdm5WL2NWemRZR0kvSUNzMWs1K1FoMHJwTm5cbmgycSttNTBJZUZMYlcvS0V1WWhmNGtNPVxuLS0tLS1FTkQgUFJJVkFURSBLRVktLS0tLVxuIiwKICAiY2xpZW50X2VtYWlsIjogImZpcmViYXNlLWFkbWluc2RrLWZic3ZjQGJhcmJlci1hcHAtNjk5M2EuaWFtLmdzZXJ2aWNlYWNjb3VudC5jb20iLAogICJjbGllbnRfaWQiOiAiMTA5MzQ3NTc1NDY3MjM5Nzg5NDgyIiwKICAiYXV0aF91cmkiOiAiaHR0cHM6Ly9hY2NvdW50cy5nb29nbGUuY29t28vb2F1dGgyL2F1dGgiLAogICJ0b2tlbl91cmkiOiAiaHR0cHM6Ly9vYXV0aDIuZ29vZ2xlYXBpcy5jb20vdG9rZW4iLAogICJhdXRoX3Byb3ZpZGVyX3g1MDlfY2VydF91cmwiOiAiaHR0cHM6Ly93d3cuZ29vZ2xlYXBpcy5jb20vb2F1dGgyL3YxL2NlcnRzIiwKICAiY2xpZW50X3g1MDlfY2VydF91cmwiOiAiaHR0cHM6Ly93d3cuZ29vZ2xlYXBpcy5jb20vcm9ib3QvdjEvbWV0YWRhdGEveDUwOS9maXJlYmFzZS1hZG1pbnNkay1mYnN2YyU0MGJhcmJlci1hcHAtNjk5M2EuaWFtLmdzZXJ2aWNlYWNjb3VudC5jb20iLAogICJ1bml2ZXJzZV9kb21haW4iOiAiZ29vZ2xlYXBpcy5jb20iCn0K";
+
+    const b64 = HARDCODED_B64 || Deno.env.get("FCM_SERVICE_ACCOUNT_B64");
+    if (b64) {
+      FCM_SERVICE_ACCOUNT = JSON.parse(atob(b64));
+      FCM_PROJECT_ID = FCM_SERVICE_ACCOUNT.project_id || FCM_PROJECT_ID;
+      console.log("✅ Successfully loaded FCM service account.");
+      return FCM_SERVICE_ACCOUNT;
+    }
+    throw new Error("Could not load Firebase Service Account.");
+  } catch (e) {
+    console.error("❌ Failed to load FCM service account:", e);
+    throw e;
+  }
+}
+
+async function getFcmAccessToken(): Promise<string> {
+  const account = await loadFcmServiceAccount();
+  const now = Math.floor(Date.now() / 1000);
+  const header = { alg: "RS256", typ: "JWT" };
+  const payload = {
+    iss: account.client_email,
+    scope: "https://www.googleapis.com/auth/firebase.messaging",
+    aud: account.token_uri,
+    iat: now,
+    exp: now + 3600,
+  };
+
+  const enc = new TextEncoder();
+  function base64url(data: Uint8Array): string {
+    let binary = '';
+    for (let i = 0; i < data.length; i++) binary += String.fromCharCode(data[i]);
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  }
+
+  const headerB64 = base64url(enc.encode(JSON.stringify(header)));
+  const payloadB64 = base64url(enc.encode(JSON.stringify(payload)));
+  const signingInput = `${headerB64}.${payloadB64}`;
+
+  const pemKey = account.private_key;
+  const pemBody = pemKey.replace(/-----BEGIN PRIVATE KEY-----/, '').replace(/-----END PRIVATE KEY-----/, '').replace(/\n/g, '');
+  const binaryKey = Uint8Array.from(atob(pemBody), (c) => c.charCodeAt(0));
+
+  const cryptoKey = await crypto.subtle.importKey("pkcs8", binaryKey, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"]);
+  const signature = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", cryptoKey, enc.encode(signingInput));
+  const jwt = `${signingInput}.${base64url(new Uint8Array(signature))}`;
+
+  const tokenRes = await fetch(account.token_uri, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
+  });
+
+  const tokenData = await tokenRes.json();
+  return tokenData.access_token;
+}
+
+async function sendFcmNotification(fcmToken: string, title: string, body: string, data: Record<string, string> = {}) {
+  try {
+    const accessToken = await getFcmAccessToken();
+    const FCM_API_URL = `https://fcm.googleapis.com/v1/projects/${FCM_PROJECT_ID}/messages:send`;
+
+    const message = {
+      message: {
+        token: fcmToken,
+        notification: { title, body },
+        android: {
+          priority: "HIGH",
+          notification: { sound: "default", channel_id: "default", click_action: "OPEN_ACTIVITY" },
+        },
+        data,
+      },
+    };
+
+    const res = await fetch(FCM_API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify(message),
+    });
+
+    return { success: res.ok, status: res.status, response: await res.text() };
+  } catch (e) {
+    return { success: false, status: 0, response: String(e) };
+  }
+}
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "https://database.donedeals.shop";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -20,215 +106,52 @@ function corsHeaders() {
 }
 
 serve(async (req: Request) => {
-  // Handle preflight CORS
-  if (req.method === "OPTIONS") {
-    return new Response("OK", { status: 200, headers: corsHeaders() });
-  }
-
-  if (req.method !== "POST") {
-    return new Response(JSON.stringify({ error: "Method not allowed" }), {
-      status: 405,
-      headers: { "Content-Type": "application/json", ...corsHeaders() },
-    });
-  }
+  if (req.method === "OPTIONS") return new Response("OK", { status: 200, headers: corsHeaders() });
 
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const body = await req.json();
-    const {
-      user_ids,
-      userIds,
-      title,
-      body: messageBody,
-      data,
-      image,
-      big_picture,
-      large_icon,
-      actionButtons,
-    } = body;
+    const { user_ids, userIds, title, body: messageBody, data: dataIn } = body;
 
-    // Support both snake_case and camelCase
     const finalUserIds = user_ids || userIds || [];
 
-    console.log("📱 Send notification by External ID (user_id) request received:", {
-      title,
-      messageBody,
-      userIds: finalUserIds,
-      hasData: !!data,
-    });
-
     if (!finalUserIds || finalUserIds.length === 0) {
-      console.error("❌ No user IDs (External IDs) provided");
-      return new Response(
-        JSON.stringify({ error: "user_ids or userIds array is required" }),
-        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders() } }
-      );
+      return new Response(JSON.stringify({ error: "user_ids required" }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders() } });
     }
 
-    if (!title || !messageBody) {
-      console.error("❌ Missing title or message body");
-      return new Response(
-        JSON.stringify({ error: "title and body are required" }),
-        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders() } }
-      );
-    }
+    console.log(`📱 Sending FCM notifications to ${finalUserIds.length} users...`);
 
-    // Filter out null/undefined values
-    const validUserIds = finalUserIds.filter((id: any): id is string => 
-      id !== null && id !== undefined && String(id).trim().length > 0
-    );
-
-    if (validUserIds.length === 0) {
-      console.error("❌ No valid user IDs after filtering");
-      return new Response(
-        JSON.stringify({ error: "No valid user IDs provided" }),
-        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders() } }
-      );
-    }
-
-    // PRIMARY: Fetch player IDs from user_devices table (where Kotlin saves them)
-    console.log(`🔍 Looking up Player IDs for ${validUserIds.length} users in user_devices...`);
-    const { data: userDevices } = await supabase
-      .from("user_devices")
-      .select("player_id, user_id")
-      .in("user_id", validUserIds);
-
-    // FALLBACK: Also check native_devices table
-    const { data: nativeDevicesFallback } = await supabase
+    // Fetch FCM tokens from native_devices
+    const { data: devices } = await supabase
       .from("native_devices")
-      .select("player_id, user_id")
-      .in("user_id", validUserIds);
+      .select("fcm_token")
+      .in("user_id", finalUserIds)
+      .not("fcm_token", "is", null);
 
-    // Combine both, deduplicate
-    const allDevices = [...(userDevices || []), ...(nativeDevicesFallback || [])];
-    const devices = allDevices;
+    const fcmTokens = [...new Set((devices || []).map((d: any) => d.fcm_token))];
 
-    const playerIds = devices
-      ?.map((d: any) => d.player_id)
-      .filter((id: string) => id && id.length > 5 && id !== "null");
-    
-    // Deduplicate player IDs
-    const uniquePlayerIds = [...new Set(playerIds)];
-
-    console.log(`🎯 Hybrid targeting: ${validUserIds.length} External IDs and ${uniquePlayerIds?.length || 0} Subscription IDs`);
-    console.log(`   (${(userDevices || []).length} from user_devices, ${(nativeDevicesFallback || []).length} from native_devices)`);
-
-    // Use OneSignal's include_aliases to target users by their External ID
-    // In OneSignal, External IDs are treated as aliases with label "external_id"
-    // OneSignal.login(userId) sets the External ID which becomes an alias
-    // IMPORTANT: When using include_aliases, must specify target_channel
-    const payload: Record<string, unknown> = {
-      app_id: ONESIGNAL_APP_ID,
-      headings: { en: title },
-      contents: { en: messageBody },
-      include_aliases: {
-        external_id: validUserIds, // Target by external_id alias
-      },
-      include_player_ids: playerIds, // Hybrid targeting
-      target_channel: "push", // REQUIRED when using include_aliases
-      // 🔔 Android: Heads-up notification settings (CRITICAL!)
-      android_importance: 5, // HIGH - Shows as heads-up notification
-      android_priority: 10, // For older Android versions
-      android_small_icon: "scissors", // 🔪 Custom scissor icon instead of default bell
-      // 🔔 iOS: High priority settings
-      ios_badged: true,
-      ios_sound: "default",
-      ios_priority: 10, // HIGH priority for iOS
-      mutable_content: true, // Allow iOS apps to modify the notification (needed for rich media)
-    };
-
-    if (data) {
-      payload.data = data;
-      console.log("📦 Attached data:", data);
-    }
-    // Images: Use for both small inline icon and big expanded picture
-    if (image) {
-      payload.image = image;
-      payload.large_icon = image; // 🔪 Small inline image (Android)
-    }
-    if (big_picture) {
-      payload.big_picture = big_picture;
-      if (!image) {
-        payload.large_icon = big_picture; // 🔪 Use as small icon if no separate image provided
-      }
-    }
-    if (large_icon) {
-      payload.large_icon = large_icon; // 🔪 Explicit large icon (Android) - takes precedence
-    }
-    if (actionButtons?.length) {
-      payload.buttons = actionButtons;
-      console.log("🔘 Action buttons:", actionButtons);
+    if (fcmTokens.length === 0) {
+      console.warn("⚠️ No FCM tokens found for users");
+      return new Response(JSON.stringify({ success: false, error: "No tokens found" }), { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders() } });
     }
 
-    console.log("📡 Sending payload to OneSignal with External ID aliases (include_aliases):", JSON.stringify(payload, null, 2));
+    const fcmData: Record<string, string> = {};
+    if (dataIn) Object.entries(dataIn).forEach(([k, v]) => { fcmData[k] = String(v); });
 
-    const response = await fetch(ONESIGNAL_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json; charset=utf-8",
-        Authorization: `Key ${ONESIGNAL_API_KEY}`,
-      },
-      body: JSON.stringify(payload),
-    });
+    console.log(`🔥 Dispatching FCM to ${fcmTokens.length} devices...`);
+    const results = await Promise.all(fcmTokens.map(token => sendFcmNotification(token, title, messageBody, fcmData)));
 
-    const responseText = await response.text();
+    const successCount = results.filter(r => r.success).length;
 
-    console.log(`📋 OneSignal response status: ${response.status}`);
-    console.log(`📋 OneSignal response: ${responseText}`);
+    return new Response(JSON.stringify({
+      success: successCount > 0,
+      successCount,
+      totalCount: fcmTokens.length,
+      notification_id: "fcm_" + Date.now()
+    }), { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders() } });
 
-    if (!response.ok) {
-      console.error("❌ OneSignal API Error:", responseText);
-      return new Response(
-        JSON.stringify({
-          error: "Failed to send notification",
-          details: responseText,
-        }),
-        { status: response.status, headers: { "Content-Type": "application/json", ...corsHeaders() } }
-      );
-    }
-
-    // Parse OneSignal response to get notification ID and check for errors
-    let onesignalResponse: any;
-    try {
-      onesignalResponse = JSON.parse(responseText);
-    } catch (e) {
-      onesignalResponse = { body: responseText };
-    }
-
-    const notificationId = onesignalResponse.id || onesignalResponse.notification_id || "processed";
-    const hasErrors = !!onesignalResponse.errors;
-
-    if (hasErrors) {
-      console.warn("⚠️ OneSignal reported partial errors:", JSON.stringify(onesignalResponse.errors, null, 2));
-    }
-
-    console.log(`✅ Notification processed for ${validUserIds.length} user(s)`);
-    console.log(`✅ OneSignal notification ID: ${notificationId}`);
-
-    return new Response(
-      JSON.stringify({
-        success: !hasErrors,
-        partial_success: hasErrors,
-        message: hasErrors 
-          ? `Notification processed but OneSignal reported errors (likely invalid user IDs)` 
-          : `Notification sent successfully to ${validUserIds.length} user(s) via External ID`,
-        userIdsCount: validUserIds.length,
-        notification_id: notificationId,
-        errors: onesignalResponse.errors
-      }),
-      { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders() } }
-    );
   } catch (error) {
     console.error("❌ Error:", error);
-    return new Response(
-      JSON.stringify({
-        error: "Internal server error",
-        details: error instanceof Error ? error.message : String(error),
-      }),
-      { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders() } }
-    );
+    return new Response(JSON.stringify({ error: String(error) }), { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders() } });
   }
 });
-
-
-

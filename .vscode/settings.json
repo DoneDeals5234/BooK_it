@@ -1,5 +1,5 @@
 {
-    "java.configuration.updateBuildConfiguration": "interactive",
+    "java.configuration.updateBuildConfiguration": "automatic",
     "builder.serverUrl": "",
     "builder.command": "npm run dev",
     "builder.runDevServer": true,

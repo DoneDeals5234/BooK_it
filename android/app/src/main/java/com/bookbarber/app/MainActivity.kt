@@ -3,6 +3,8 @@ package com.bookbarber.app
 import android.app.AlarmManager
 import android.app.DownloadManager
 import android.app.PendingIntent
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.*
 import android.net.Uri
 import org.json.JSONArray
@@ -14,7 +16,6 @@ import android.webkit.JavascriptInterface
 import android.widget.Toast
 import androidx.core.app.ActivityCompat
 import com.getcapacitor.BridgeActivity
-import com.onesignal.OneSignal
 import java.util.*
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.FusedLocationProviderClient
@@ -48,17 +49,32 @@ class MainActivity : BridgeActivity() {
         // Add JavaScript bridge
         addJavascriptBridge()
 
-        // Initialize OneSignal
-        OneSignal.initWithContext(this, "1f14fad4-0d2f-465a-b3a8-e0e976b8729f")
-
-        // ✅ Kotlin-native player_id capture (replaces unreliable React/JS approach)
-        OneSignalPlayerIdManager.initialize(this)
+        // OneSignal has been completely removed in favor of FCM.
+        Log.d(TAG, "🚀 Native initialized. Using FCM for notifications.")
 
         // Initialize Location Client
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
         // Handle intent if app was opened from alarm
         handleAlarmIntent(intent)
+
+        // Create default notification channel for FCM
+        createDefaultNotificationChannel()
+    }
+
+    private fun createDefaultNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val name = "Default"
+            val descriptionText = "Default notifications"
+            val importance = NotificationManager.IMPORTANCE_HIGH
+            val channel = android.app.NotificationChannel("default", name, importance).apply {
+                description = descriptionText
+            }
+            val notificationManager: android.app.NotificationManager =
+                getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+            notificationManager.createNotificationChannel(channel)
+            Log.d(TAG, "✅ Default notification channel created")
+        }
     }
 
     private fun addJavascriptBridge() {
@@ -208,7 +224,6 @@ class MainActivity : BridgeActivity() {
     }
 
     // --- JS Bridge Class (Kotlin Version) ---
-    // --- JS Bridge Class (Kotlin Version) ---
     inner class AndroidBridge {
         @JavascriptInterface
         fun scheduleAlarm(bookingId: String, reminderTime: String, bookingDate: String,
@@ -306,8 +321,6 @@ class MainActivity : BridgeActivity() {
             this@MainActivity.startService(intent)
         }
 
-        // --- NEW TEST METHODS ---
-
         @JavascriptInterface
         fun sendTestNotification() {
             Log.d(TAG, "🔔 Calling sendTestNotification from React")
@@ -329,61 +342,6 @@ class MainActivity : BridgeActivity() {
         fun setAtHome(atHome: Boolean) {
             MainActivity.isAtHomeState = atHome
             Log.i(TAG, "🏠 Home state updated from JS: $atHome")
-        }
-
-        // ✅ Called from React when user logs in — links player_id to user
-        @JavascriptInterface
-        fun onUserLogin(userId: String, email: String, password: String? = null) {
-            Log.d("MainActivity", "👤 User logged in via bridge: $userId, $email")
-            
-            // Step 1: Tell OneSignal to link this device to the User ID (Identity)
-            try {
-                OneSignal.login(userId)
-                Log.d(TAG, "✅ OneSignal.login($userId) called")
-            } catch (e: Exception) {
-                Log.e(TAG, "❌ OneSignal.login failed", e)
-            }
-
-            // Step 2: Save credentials and trigger Player ID sync
-            OneSignalPlayerIdManager.onUserLoggedIn(userId, email, password)
-        }
-
-        // ✅ Called from React when user logs out
-        @JavascriptInterface
-        fun onUserLogout() {
-            Log.d(TAG, "🚪 onUserLogout called from React")
-            OneSignalPlayerIdManager.onUserLoggedOut()
-            try {
-                OneSignal.logout()
-            } catch (e: Exception) {
-                Log.e(TAG, "Error clearing OneSignal External ID", e)
-            }
-        }
-
-        // ✅ Debug: Get current player_id from Kotlin
-        @JavascriptInterface
-        fun getCurrentPlayerId(): String {
-            return OneSignalPlayerIdManager.getCurrentPlayerId() ?: ""
-        }
-
-        @JavascriptInterface
-        fun getOneSignalStatus(): String {
-            val playerId = OneSignal.User.pushSubscription.id
-            val optedIn = OneSignal.User.pushSubscription.optedIn
-            return "ID: $playerId, OptedIn: $optedIn"
-        }
-
-        @JavascriptInterface
-        fun promptForNotifications() {
-            Log.d(TAG, "🔔 Requesting OneSignal notification permission...")
-            lifecycleScope.launch {
-                try {
-                    val result = OneSignal.Notifications.requestPermission(true)
-                    Log.d(TAG, "🔔 Permission result: $result")
-                } catch (e: Exception) {
-                    Log.e(TAG, "❌ Error requesting notification permission", e)
-                }
-            }
         }
 
         @JavascriptInterface
@@ -422,14 +380,9 @@ class MainActivity : BridgeActivity() {
                 val urls = JSONArray(urlsJson)
                 val downloadManager = this@MainActivity.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
                 
-                // On Android 10+ (API 29+), we don't need WRITE_EXTERNAL_STORAGE for DownloadManager 
-                // to save to public directories like DIRECTORY_PICTURES
-                
                 for (i in 0 until urls.length()) {
                     val url = urls.getString(i)
                     val uri = Uri.parse(url)
-                    
-                    // Extract extension or default to png
                     val extension = if (url.contains(".jpg") || url.contains(".jpeg")) "jpg" else "png"
                     val fileName = "bookit_order_${System.currentTimeMillis()}_$i.$extension"
                     

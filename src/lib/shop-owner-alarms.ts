@@ -3,7 +3,7 @@
  * Handles scheduling alarms for shop owners at booking time to confirm if customers are coming
  */
 
-import { sendScheduledReminderNotification } from '@/lib/onesignal-messaging';
+import { sendNativeNotification } from '@/lib/native-notifications';
 
 interface ShopOwnerAlarmOptions {
   shopOwnerId: string;
@@ -20,61 +20,60 @@ interface ShopOwnerAlarmOptions {
 
 /**
  * Schedule an alarm for a shop owner at booking time
- * The shop owner will receive a local reminder/alarm at the booking time to confirm if the customer is coming
+ * Uses FCM (Firebase Cloud Messaging) via Supabase Edge Function
  */
 export async function scheduleShopOwnerAlarm(
   options: ShopOwnerAlarmOptions
 ): Promise<{ success: boolean; message: string }> {
   try {
     console.log('⏰ Scheduling shop owner alarm for booking:', options.bookingId);
-    console.log(`   Time: ${options.bookingTime} on ${options.bookingDate}`);
-    console.log(`   Customer: ${options.customerName} (${options.customerPhone})`);
-    console.log(`   Service: ${options.serviceName}`);
-
-    // Schedule a reminder for the shop owner at the booking time
-    // This will trigger a local alarm/notification on the shop owner's device
-    const success = await sendScheduledReminderNotification(
-      options.shopOwnerId,
-      {
+    
+    // NOTE: True server-side scheduling requires a background worker.
+    // For now, we send an immediate notification that the native app will handle
+    // to show an alarm or reminder if appropriate.
+    
+    const payload = {
+      title: '⏰ Booking Reminder',
+      body: `${options.customerName} has a booking for ${options.serviceName} at ${options.bookingTime}`,
+      data: {
         bookingId: options.bookingId,
         shopId: options.shopId,
         shopName: options.shopName,
-        tokenNumber: options.tokenNumber,
-        userName: options.customerName, // Used as customer name in the notification
+        tokenNumber: options.tokenNumber.toString(),
+        userName: options.customerName,
         timeSlot: options.bookingTime,
         bookingDate: options.bookingDate,
-        reminderTime: options.bookingTime, // Schedule alarm for booking time, not before
-      },
-      {
-        isShopOwnerAlarm: true, // Mark this as a shop owner alarm
+        isShopOwnerAlarm: 'true',
+        type: 'booking_reminder'
       }
-    );
+    };
+
+    const success = await sendNativeNotification([options.shopOwnerId], payload);
 
     if (success) {
-      console.log('✅ Shop owner alarm scheduled successfully');
+      console.log('✅ Shop owner alarm notification sent successfully');
       return {
         success: true,
-        message: `Shop owner alarm scheduled for ${options.bookingTime}`,
+        message: `Shop owner notification sent for ${options.bookingTime}`,
       };
     } else {
-      console.warn('⚠️ Failed to schedule shop owner alarm');
+      console.warn('⚠️ Failed to send shop owner alarm notification');
       return {
         success: false,
-        message: 'Failed to schedule shop owner alarm',
+        message: 'Failed to send shop owner notification',
       };
     }
   } catch (error) {
-    console.error('❌ Error scheduling shop owner alarm:', error);
+    console.error('❌ Error in scheduleShopOwnerAlarm:', error);
     return {
       success: false,
-      message: `Error scheduling shop owner alarm: ${error instanceof Error ? error.message : String(error)}`,
+      message: `Error: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
 }
 
 /**
  * Send notification to customer that shop owner confirmed they're coming
- * Get booking details from Supabase and send notification to customer
  */
 export async function notifyCustomerShopOwnerConfirmed(
   bookingId: string,
@@ -85,9 +84,7 @@ export async function notifyCustomerShopOwnerConfirmed(
   try {
     console.log('📤 Notifying customer that shop owner confirmed their booking');
 
-    // Import functions needed to fetch booking and send notification
     const { supabase } = await import('@/lib/supabase');
-    const { sendNotificationByUserId } = await import('@/lib/onesignal-messaging');
 
     // Fetch the booking to get customer details
     const { data: booking, error } = await supabase
@@ -101,47 +98,40 @@ export async function notifyCustomerShopOwnerConfirmed(
       return false;
     }
 
-    console.log(`✅ Found booking for customer: ${booking.user_name}`);
-
-    // Send notification to customer
-    const success = await sendNotificationByUserId(
+    // Send notification to customer via FCM
+    const success = await sendNativeNotification(
       [booking.user_id],
       {
         title: '✅ Shop Owner Confirmed',
         body: `Go to ${shopName} at your earliest! Your token #${tokenNumber} is ready for ${timeSlot}.`,
-        tokenNumber,
-        shopName,
-        userName: booking.user_name,
+        data: {
+          type: 'booking_confirmed',
+          tokenNumber: tokenNumber.toString(),
+          shopName,
+          userName: booking.user_name,
+          timeSlot
+        }
       }
     );
 
-    if (success) {
-      console.log('✅ Customer notification sent successfully');
-      return true;
-    } else {
-      console.error('❌ Failed to send customer notification');
-      return false;
-    }
+    return success;
   } catch (error) {
-    console.error('❌ Error notifying customer of shop owner confirmation:', error);
+    console.error('❌ Error notifying customer:', error);
     return false;
   }
 }
 
 /**
  * Send notification to customer that shop owner is busy (booking denied)
- * Also deletes the booking
  */
 export async function notifyCustomerShopOwnerDenied(
   bookingId: string,
   shopName: string
 ): Promise<boolean> {
   try {
-    console.log('📤 Notifying customer that shop owner is busy and deleting booking');
+    console.log('📤 Notifying customer that shop owner is busy');
 
-    // Import functions needed
     const { supabase } = await import('@/lib/supabase');
-    const { sendNotificationByUserId } = await import('@/lib/onesignal-messaging');
     const { deleteBookingFromSupabase } = await import('@/lib/supabase-bookings');
 
     // Fetch the booking to get customer details
@@ -151,35 +141,25 @@ export async function notifyCustomerShopOwnerDenied(
       .eq('id', bookingId)
       .single();
 
-    if (error || !booking || !booking.user_id) {
-      console.warn('⚠️ Could not fetch booking or customer user ID:', error);
-      // Still try to delete the booking even if we can't notify
-      await deleteBookingFromSupabase(bookingId);
-      return false;
+    let notificationSent = false;
+    if (booking && booking.user_id) {
+      notificationSent = await sendNativeNotification(
+        [booking.user_id],
+        {
+          title: '⏸️ Shop Unavailable',
+          body: `Sorry! ${shopName} is busy right now. Please try booking another time.`,
+          data: {
+            type: 'booking_denied',
+            shopName,
+            userName: booking.user_name
+          }
+        }
+      );
     }
-
-    console.log(`✅ Found booking for customer: ${booking.user_name}`);
-
-    // Send notification to customer
-    const notificationSent = await sendNotificationByUserId(
-      [booking.user_id],
-      {
-        title: '⏸️ Shop Unavailable',
-        body: `Sorry! ${shopName} is busy right now. Please try booking another time.`,
-        shopName,
-        userName: booking.user_name,
-      }
-    );
 
     // Delete the booking
     console.log('🗑️ Deleting booking due to shop owner denial');
-    const bookingDeleted = await deleteBookingFromSupabase(bookingId);
-
-    if (bookingDeleted) {
-      console.log('✅ Booking deleted successfully');
-    } else {
-      console.error('❌ Failed to delete booking');
-    }
+    await deleteBookingFromSupabase(bookingId);
 
     return notificationSent;
   } catch (error) {

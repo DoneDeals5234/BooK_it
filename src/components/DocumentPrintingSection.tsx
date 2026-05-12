@@ -39,6 +39,7 @@ export const DocumentPrintingSection = ({ shopId, shopName, shopLat, shopLng, sh
 
   // Delivery state
   const [deliveryType, setDeliveryType] = useState<'pickup' | 'delivery'>('pickup');
+  const [step, setStep] = useState(1);
   const [address, setAddress] = useState('');
   const [locationLink, setLocationLink] = useState<string | null>(null);
   const [isFetchingLocation, setIsFetchingLocation] = useState(false);
@@ -211,6 +212,14 @@ export const DocumentPrintingSection = ({ shopId, shopName, shopLat, shopLng, sh
   };
 
   useEffect(() => {
+    if (files.length > 0 && step === 1) {
+      setStep(2);
+    } else if (files.length === 0) {
+      setStep(1);
+    }
+  }, [files.length, step]);
+
+  useEffect(() => {
     if (deliveryType === 'delivery') {
       fetchLocation();
     }
@@ -357,8 +366,10 @@ export const DocumentPrintingSection = ({ shopId, shopName, shopLat, shopLng, sh
         </div>
 
         {/* Step 2: Options */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div className="space-y-6">
+        {step >= 2 && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in fade-in slide-in-from-top-4 duration-500 mt-6 pt-6 border-t border-slate-100">
+              <div className="space-y-6">
             <div className="space-y-4">
               <div className="flex items-center gap-2">
                 <Badge variant="outline" className="h-6 w-6 rounded-full p-0 flex items-center justify-center border-red-200 text-red-600 font-bold">2</Badge>
@@ -457,11 +468,27 @@ export const DocumentPrintingSection = ({ shopId, shopName, shopLat, shopLng, sh
             </div>
           </div>
         </div>
+        
+        {step === 2 && (
+          <div className="pt-2 pb-2 animate-in fade-in">
+            <Button 
+              onClick={() => setStep(3)} 
+              variant="outline"
+              className="w-full h-12 text-md font-bold border-2 border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700"
+            >
+              Continue to Delivery Options <Navigation className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
+        )}
+        </>
+        )}
 
         {/* Step 3: Delivery Options */}
-        <div className="space-y-4 pt-4 border-t border-slate-100">
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="h-6 w-6 rounded-full p-0 flex items-center justify-center border-red-200 text-red-600 font-bold">4</Badge>
+        {step >= 3 && (
+          <div className="animate-in fade-in slide-in-from-top-4 duration-500 space-y-8 mt-6 pt-6 border-t border-slate-100">
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="h-6 w-6 rounded-full p-0 flex items-center justify-center border-red-200 text-red-600 font-bold">4</Badge>
             <h3 className="font-bold text-slate-800 uppercase tracking-wide">Delivery Options</h3>
           </div>
           
@@ -566,6 +593,8 @@ export const DocumentPrintingSection = ({ shopId, shopName, shopLat, shopLng, sh
             </>
           )}
         </Button>
+        </div>
+        )}
       </CardContent>
     </Card>
   );
