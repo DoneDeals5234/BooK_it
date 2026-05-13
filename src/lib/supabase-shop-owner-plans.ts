@@ -239,3 +239,30 @@ export const getLatestPlanForEmail = async (email: string): Promise<ShopOwnerPla
     return null;
   }
 };
+// Record a free plan for a user
+export const recordFreePlan = async (email: string, shopId?: string): Promise<boolean> => {
+  if (!isSupabaseConfigured) return true;
+
+  try {
+    const { error } = await supabase
+      .from('shop_owner_plans')
+      .insert({
+        email,
+        plan_name: 'free',
+        plan_price: 0,
+        payment_status: 'success',
+        razorpay_order_id: `free_${Date.now()}`,
+        shop_id: shopId || null,
+        updated_at: new Date().toISOString()
+      });
+
+    if (error) {
+      console.error('Error recording free plan:', error);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error('Error in recordFreePlan:', error);
+    return false;
+  }
+};

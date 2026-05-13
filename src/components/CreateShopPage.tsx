@@ -6,11 +6,13 @@ import { Label } from '@/components/ui/label';
 import { useAuth, type LocationData } from '@/contexts/AuthContext';
 import { useUserProfile } from '@/contexts/UserProfileContext';
 import toast from 'react-hot-toast';
-import { ArrowLeft, Store, CheckCircle, Check, X, MapPin } from 'lucide-react';
+import { ArrowLeft, Store, CheckCircle, Check, X, MapPin, Edit } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { fetchUserLocation } from '@/lib/geolocation';
 import { initiateRazorpayPayment } from '@/lib/razorpay-payment';
-import { PLAN_DETAILS, type PlanName } from '@/lib/supabase-shop-owner-plans';
+import { PLAN_DETAILS, type PlanName, recordFreePlan } from '@/lib/supabase-shop-owner-plans';
 import { getShops } from '@/lib/shops-storage';
+import { invalidateAllCaches } from '@/lib/shops-cache';
 import { useAppUpdate } from '@/contexts/AppUpdateContext';
 
 const PREDEFINED_CATEGORIES = [
@@ -185,10 +187,22 @@ export const CreateShopPage = () => {
         facebookId
       );
       
+      // Record free plan if selected
+      if (selectedPlan === 'free') {
+        try {
+          await recordFreePlan(user?.email || email);
+        } catch (planErr) {
+          console.error('Error recording free plan:', planErr);
+        }
+      }
+      
       // Update the shop with phone numbers after creation if needed
       // (Actually signUpAsShopOwner in AuthContext creates the shop)
+      // Invalidate cache so the new shop appears immediately on Home page
+      invalidateAllCaches();
       toast.success('Shop created successfully!');
       setCurrentStep('success');
+
     } catch (error: any) {
       toast.error(error.message || 'Failed to create shop');
     } finally {
@@ -261,11 +275,34 @@ export const CreateShopPage = () => {
 
         {currentStep === 'details' && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-6">
-            <div className="bg-green-50 rounded-xl p-4 flex items-center gap-3 border border-green-100">
-              <CheckCircle className="h-6 w-6 text-green-500" />
-              <div>
-                <p className="text-sm font-bold text-green-800">Plan Confirmed</p>
-                <p className="text-xs text-green-600 font-medium">You selected the {PLAN_DETAILS[selectedPlan!].name} plan.</p>
+            {/* Selected Plan Summary */}
+            <div 
+              className="rounded-2xl p-5 flex items-center justify-between border shadow-sm transition-all"
+              style={{ 
+                backgroundColor: `${PLAN_DETAILS[selectedPlan!].color}10`,
+                borderColor: `${PLAN_DETAILS[selectedPlan!].color}30` 
+              }}
+            >
+              <div className="flex items-center gap-4">
+                <div 
+                  className="h-12 w-12 rounded-xl flex items-center justify-center shadow-inner"
+                  style={{ backgroundColor: PLAN_DETAILS[selectedPlan!].color }}
+                >
+                  <Store className="h-6 w-6 text-white" />
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase font-black tracking-widest opacity-60" style={{ color: PLAN_DETAILS[selectedPlan!].color }}>Selected Plan</p>
+                  <h3 className="text-lg font-black" style={{ color: PLAN_DETAILS[selectedPlan!].color }}>
+                    {PLAN_DETAILS[selectedPlan!].name}
+                    {selectedPlan === 'free' && <span className="ml-2 text-xs bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-bold uppercase">Free</span>}
+                  </h3>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-xl font-black" style={{ color: PLAN_DETAILS[selectedPlan!].color }}>
+                  {PLAN_DETAILS[selectedPlan!].priceDisplay}
+                </p>
+                <p className="text-[10px] font-bold opacity-50 uppercase tracking-tighter">One-Time Payment</p>
               </div>
             </div>
 
@@ -550,7 +587,20 @@ export const CreateShopPage = () => {
               </div>
             </div>
             <h2 className="text-3xl font-black text-slate-900">All Set!</h2>
-            <p className="text-slate-500 font-medium">Your shop "{shopName}" has been created successfully. You can now start managing your services and bookings.</p>
+            <p className="text-slate-500 font-medium">Your shop "{shopName}" has been created successfully with the <span className="font-bold" style={{ color: PLAN_DETAILS[selectedPlan!].color }}>{PLAN_DETAILS[selectedPlan!].name}</span> plan.</p>
+            <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100 flex items-center justify-between">
+              <div className="text-left">
+                <p className="text-[10px] uppercase font-black text-slate-400 mb-1">Active Plan</p>
+                <div className="flex items-center gap-2">
+                  <div className="h-2 w-2 rounded-full animate-pulse bg-green-500" />
+                  <span className="text-lg font-black text-slate-800">{PLAN_DETAILS[selectedPlan!].name}</span>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] uppercase font-black text-slate-400 mb-1">Status</p>
+                <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-black uppercase">Active</span>
+              </div>
+            </div>
             <Button className="w-full h-14 text-xl font-bold bg-slate-900 hover:bg-slate-800 rounded-xl mt-4" onClick={() => navigate('/')}>
               Go to Dashboard
             </Button>

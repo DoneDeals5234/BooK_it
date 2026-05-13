@@ -316,13 +316,13 @@ export default function HomePage({ onShowLogin, initialTab = 'explore' }: HomePa
   // Handle tab changes and location prompt
   useEffect(() => {
     if (currentTab === 'videos') {
-      navigate('/videos', { replace: true });
+      navigate('/videos');
     } else if (currentTab === 'find') {
-      navigate('/chat', { replace: true });
+      navigate('/chat');
     } else if (currentTab === 'bazar') {
-      navigate('/bazar', { replace: true });
+      navigate('/bazar');
     } else if (currentTab === 'explore') {
-      navigate('/', { replace: true });
+      navigate('/');
     }
   }, [currentTab, navigate]);
 

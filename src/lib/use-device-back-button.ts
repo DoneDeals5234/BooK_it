@@ -15,57 +15,65 @@ interface UseDeviceBackButtonOptions {
 const handlers: { id: string; priority: number; handler: () => boolean | Promise<boolean> }[] = [];
 
 // Initialize the global listener once
+// Register Capacitor listener if available
 if (Capacitor.isNativePlatform()) {
   App.addListener('backButton', async (data) => {
-    console.log('⬅️ Device Back Button Pressed');
-    
-    // Sort handlers by priority (descending)
-    const sortedHandlers = [...handlers].sort((a, b) => b.priority - a.priority);
-    
-    for (const entry of sortedHandlers) {
-      const consumed = await entry.handler();
-      if (consumed) {
-        console.log(`✅ Back event consumed by handler: ${entry.id}`);
-        return; // Stop propagation
-      }
-    }
-    
-    // Fallback if no handler consumed the event
-    console.log('⚠️ No handler consumed the back event, performing default action');
-    if (window.location.pathname !== '/') {
-      window.history.back();
-    }
+    handleBackAction();
   });
+}
 
-  // Listen for custom "backbutton" event from Kotlin
-  document.addEventListener('backbutton', () => {
-    App.dispatchEvent('backButton', { canGoBack: true });
-  });
+// Listen for custom "backbutton" event from Kotlin (works in ANY webview)
+document.addEventListener('backbutton', () => {
+  handleBackAction();
+});
+
+// Universal back handler logic
+async function handleBackAction() {
+  console.log('⬅️ Back Button Pressed (Global Handler)');
+  
+  // Sort handlers by priority (descending)
+  const sortedHandlers = [...handlers].sort((a, b) => b.priority - a.priority);
+  
+  for (const entry of sortedHandlers) {
+    const consumed = await entry.handler();
+    if (consumed) {
+      console.log(`✅ Back event consumed by handler: ${entry.id}`);
+      return; // Stop propagation
+    }
+  }
+  
+  // Fallback if no handler consumed the event
+  console.log('⚠️ No handler consumed the back event, performing default action');
+  if (window.location.pathname !== '/') {
+    window.history.back();
+  }
 }
 
 export const useDeviceBackButton = (options: UseDeviceBackButtonOptions = {}) => {
   const { onBackPressed, onExitAttempt, priority = 0, disabled = false } = options;
-  const backPressCountRef = useRef(0);
-  const backPressTimerRef = useRef<NodeJS.Timeout>();
-  const lastBackPressRef = useRef(0);
   const handlerId = useRef(`handler-${Math.random().toString(36).substr(2, 9)}`);
+  
+  // Use refs to keep callbacks stable without triggering re-renders of the effect
+  const callbacksRef = useRef({ onBackPressed, onExitAttempt });
+  
+  useEffect(() => {
+    callbacksRef.current = { onBackPressed, onExitAttempt };
+  }, [onBackPressed, onExitAttempt]);
 
   useEffect(() => {
-    if (!Capacitor.isNativePlatform() || disabled) {
+    if (disabled) {
       return;
     }
 
     const currentHandler = async (): Promise<boolean> => {
-      const isHome = window.location.pathname === '/';
+      // In Capacitor, the root is usually '/' or '/index.html'
+      const isHome = window.location.pathname === '/' || window.location.pathname === '/index.html';
+      const currentCallbacks = callbacksRef.current;
       
       // 1. Try to handle as a back navigation first if not at home
-      // OR if the component explicitly wants to handle back events even at home (e.g. closing a sub-modal)
-      if (onBackPressed) {
-        // We only call onBackPressed if we're not at home, 
-        // OR if the component specifically wants to intercept home-level back presses
+      if (currentCallbacks.onBackPressed) {
         if (!isHome || priority > 0) {
-          const result = (onBackPressed as any)();
-          // If the handler explicitly returns false, it means it didn't consume the event
+          const result = (currentCallbacks.onBackPressed as any)();
           if (result !== false) {
             return true;
           }
@@ -73,12 +81,17 @@ export const useDeviceBackButton = (options: UseDeviceBackButtonOptions = {}) =>
       }
 
       // 2. If at home, handle as an exit attempt
-      if (isHome && onExitAttempt) {
-        onExitAttempt();
+      if (isHome && currentCallbacks.onExitAttempt) {
+        currentCallbacks.onExitAttempt();
         return true; // Consumed
       }
 
-      // If no handler consumed it and we're not at home, bubble up to default behavior (history.back)
+      // 3. App-level fallback: if we have NO specific handler but we are NOT at home, force go to home
+      if (!isHome && priority === 0 && !currentCallbacks.onBackPressed) {
+        window.location.href = '/';
+        return true;
+      }
+
       return false;
     };
 
@@ -95,11 +108,8 @@ export const useDeviceBackButton = (options: UseDeviceBackButtonOptions = {}) =>
       if (index !== -1) {
         handlers.splice(index, 1);
       }
-      if (backPressTimerRef.current) {
-        clearTimeout(backPressTimerRef.current);
-      }
     };
-  }, [onBackPressed, onExitAttempt, priority, disabled]);
+  }, [priority, disabled]);
 };
 
 // For web browsers

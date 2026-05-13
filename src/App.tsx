@@ -406,7 +406,7 @@ function AppContentInner() {
 
           <Route path="/profile" element={
             <ProfilePage
-              onClose={() => navigate('/', { replace: true })}
+              onClose={() => navigate('/')}
               onShopSelect={(shopId) => navigate(`/shop/${shopId}`)}
               initialTab={(new URLSearchParams(location.search).get('tab') as any) || 'today'}
               openInbox={location.search.includes('tab=inbox') ? 1 : 0}
@@ -415,14 +415,14 @@ function AppContentInner() {
 
           <Route path="/profile/:userId" element={
             <ProfilePage
-              onClose={() => navigate('/', { replace: true })}
+              onClose={() => navigate('/')}
               onShopSelect={(shopId) => navigate(`/shop/${shopId}`)}
               targetUserId={location.pathname.split('/').pop()}
             />
           } />
 
-          <Route path="/videos" element={<ShortVideosPage onClose={() => navigate('/', { replace: true })} />} />
-          <Route path="/chat" element={<WorldChatPage onClose={() => navigate('/', { replace: true })} onShowLogin={() => setShowLoginPopup(true)} />} />
+          <Route path="/videos" element={<ShortVideosPage onClose={() => navigate('/')} />} />
+          <Route path="/chat" element={<WorldChatPage onClose={() => navigate('/')} onShowLogin={() => setShowLoginPopup(true)} />} />
 
           <Route path="/shop/:shopId" element={
             <ShopDetailsPage

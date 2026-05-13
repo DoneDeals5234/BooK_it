@@ -19,7 +19,7 @@ import { toast } from 'sonner';
 
 const CATEGORIES = [
   { id: 'dairy', name: 'Dairy & Eggs', image: 'https://images.unsplash.com/photo-1550583724-b2692b85b150?auto=format&fit=crop&q=80&w=150' },
-  { id: 'snacks', name: 'Snacks', image: 'https://images.unsplash.com/photo-1599490659213-e2b9527bb087?auto=format&fit=crop&q=80&w=150' },
+  { id: 'snacks', name: 'Snacks', image: 'https://images.unsplash.com/photo-1576618148400-f54bed99fcfd?auto=format&fit=crop&q=80&w=150' },
   { id: 'beverages', name: 'Drinks', image: 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?auto=format&fit=crop&q=80&w=150' },
   { id: 'instant', name: 'Instant Food', image: 'https://images.unsplash.com/photo-1612929633738-8fe44f7ec841?auto=format&fit=crop&q=80&w=150' },
   { id: 'grocery', name: 'Grocery', image: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&q=80&w=150' },
@@ -72,7 +72,12 @@ export default function BazarTab({ onShowLogin, initialProducts = [], onProducts
   // Modal states removed
 
   useEffect(() => {
-    if (products.length > 0 && onProductsLoaded) onProductsLoaded(products);
+    if (products.length > 0) {
+      if (onProductsLoaded) onProductsLoaded(products);
+      try {
+        localStorage.setItem('bazar_products_cache', JSON.stringify(products));
+      } catch (e) {}
+    }
   }, [products]);
 
   useEffect(() => {
@@ -137,7 +142,7 @@ export default function BazarTab({ onShowLogin, initialProducts = [], onProducts
 
   return (
     <div className="min-h-screen bg-[#F8F9FB] pb-24">
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-slate-100 shadow-sm">
+      <header className="relative bg-white border-b border-slate-100 shadow-sm">
         <div className="max-w-md mx-auto px-4 py-4 flex items-center gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
