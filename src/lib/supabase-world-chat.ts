@@ -173,48 +173,37 @@ export const formatWorldChatTime = (dateString: string): string => {
   });
 };
 
-// Convert and Compress chat image to Base64 (Bypassing Storage Bucket)
+// Upload chat image to Supabase Storage bucket
 export const uploadWorldChatImage = async (
   file: File,
   userId: string
 ): Promise<string | null> => {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        // Create canvas for compression
-        const canvas = document.createElement('canvas');
-        let width = img.width;
-        let height = img.height;
+  try {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${userId}-${Date.now()}.${fileExt}`;
+    const filePath = `${fileName}`;
 
-        // Max dimensions (e.g., 1200px)
-        const MAX_SIZE = 1200;
-        if (width > height) {
-          if (width > MAX_SIZE) {
-            height *= MAX_SIZE / width;
-            width = MAX_SIZE;
-          }
-        } else {
-          if (height > MAX_SIZE) {
-            width *= MAX_SIZE / height;
-            height = MAX_SIZE;
-          }
-        }
+    console.log('📤 Uploading image to world-chat-images bucket...');
+    const { data, error } = await supabase.storage
+      .from('world-chat-images')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false
+      });
 
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx?.drawImage(img, 0, 0, width, height);
+    if (error) {
+      console.error('❌ Error uploading image:', error);
+      return null;
+    }
 
-        // Convert to Base64 with quality reduction (0.6 = 60% quality)
-        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6);
-        resolve(compressedBase64);
-      };
-      img.onerror = () => resolve(null);
-      img.src = e.target?.result as string;
-    };
-    reader.onerror = () => resolve(null);
-    reader.readAsDataURL(file);
-  });
+    const { data: { publicUrl } } = supabase.storage
+      .from('world-chat-images')
+      .getPublicUrl(filePath);
+
+    console.log('✅ Image uploaded, URL:', publicUrl);
+    return publicUrl;
+  } catch (error) {
+    console.error('❌ Error in uploadWorldChatImage:', error);
+    return null;
+  }
 };

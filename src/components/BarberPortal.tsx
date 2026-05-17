@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { supabase } from '@/lib/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -55,6 +56,7 @@ import {
 } from 'lucide-react';
 // import removeBackground from '@imgly/background-removal'; (Using dynamic import instead)
 import { getShops, updateShop, getShopById } from '@/lib/shops-storage';
+import { getFeaturedProductsByShopId } from '@/lib/supabase-featured-products';
 import { formatIST } from '@/lib/utils';
 import { SendThoughtModal } from './SendThoughtModal';
 import { getLatestPlanForEmail, type ShopOwnerPlan } from '@/lib/supabase-shop-owner-plans';
@@ -68,8 +70,10 @@ import { initializeAppLifecycle, onAppStateChange } from '@/lib/app-lifecycle';
 import { useAuth } from '@/contexts/AuthContext';
 import { CampaignBuilder } from './campaigns/CampaignBuilder';
 import { CampaignHistory } from './campaigns/CampaignHistory';
+import { ReceivedCampaignsList } from './campaigns/ReceivedCampaignsList';
 import { TimeSlotSettingsPanel } from './TimeSlotSettingsPanel';
 import { IncomingBookingRequests } from './IncomingBookingRequests';
+import { SimpleBookingManager } from './portal/SimpleBookingManager';
 import { ShopCustomizer } from './ShopCustomizer';
 import { ShopDetailsPage } from './ShopDetailsPage';
 import { VideoRecorder } from './VideoRecorder';
@@ -78,7 +82,8 @@ import { KhataBook } from './KhataBook';
 import { OrderRequestsPanel } from './OrderRequestsPanel';
 import toast from 'react-hot-toast';
 import { notifySuccess } from '@/lib/notification-helper';
-import { getFeaturedProductsByShopId, addFeaturedProduct, updateFeaturedProduct, deleteFeaturedProduct } from '@/lib/supabase-featured-products';
+import { ProductsTab } from './portal/ProductsTab';
+import { useAIImage } from '@/hooks/useAIImage';
 import { getAllOffersByShopId, addOffer, updateOffer, deleteOffer } from '@/lib/supabase-offers';
 import type { Shop } from '@/lib/shops-storage';
 import type { Booking } from '@/lib/bookings-storage';
@@ -114,6 +119,7 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
   const [savingSettings, setSavingSettings] = useState(false);
   const [gettingLocation, setGettingLocation] = useState(false);
   const [campaignView, setCampaignView] = useState<'list' | 'create'>('list');
+  const [campaignSubTab, setCampaignSubTab] = useState<'sent' | 'received'>('sent');
   const [showWebsiteBuilder, setShowWebsiteBuilder] = useState(false);
   const [showHelpDialog, setShowHelpDialog] = useState(false);
   const [showSendThought, setShowSendThought] = useState(false);
@@ -134,12 +140,6 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
   const [editingService, setEditingService] = useState<string | null>(null);
   const [editingBarber, setEditingBarber] = useState<string | null>(null);
 
-  const [featuredProducts, setFeaturedProducts] = useState<FeaturedProduct[]>([]);
-  const [newFeaturedProduct, setNewFeaturedProduct] = useState({ title: '', price: '', originalPrice: '', discountPercentage: '', category: '', imageUrl: '', inventory: '' });
-  const [editingProduct, setEditingProduct] = useState<string | null>(null);
-  const [loadingProducts, setLoadingProducts] = useState(false);
-
-  // Shop Offers state
   const [shopOffers, setShopOffers] = useState<ShopOffer[]>([]);
   const [newOffer, setNewOffer] = useState({ title: '', description: '', discount: '', discountType: 'percentage' as 'percentage' | 'amount', imageUrl: '', validUntil: '' });
   const [editingOffer, setEditingOffer] = useState<string | null>(null);
@@ -152,230 +152,13 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
   const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
   const [loadingOrders, setLoadingOrders] = useState(false);
 
-  // AI Features states
-  const [isRemovingBackground, setIsRemovingBackground] = useState(false);
-  const [isGeneratingAIImage, setIsGeneratingAIImage] = useState(false);
-  const [aiProgress, setAiProgress] = useState(0);
-
-  const processRemoveBackground = async (base64Image: string): Promise<string | null> => {
-    if (!base64Image) return null;
-    setIsRemovingBackground(true);
-    setAiProgress(0);
-    const toastId = toast.loading('Initializing AI Model...');
-    try {
-      const imglyModule = await import('@imgly/background-removal');
-      const removeBg = imglyModule.removeBackground || imglyModule.default;
-      if (typeof removeBg !== 'function') throw new Error('removeBackground is not available');
-
-      const config = {
-        publicPath: 'https://static.img.ly/packages/@imgly/background-removal-data/1.4.5/dist/', // Ensure assets are loaded
-        model: 'medium', // 'medium' is a good balance for HQ without being too slow
-        output: {
-          format: 'image/png',
-          quality: 0.95,
-        },
-        progress: (key: string, current: number, total: number) => {
-          if (total > 0) {
-            const percentage = Math.round((current / total) * 100);
-            setAiProgress(percentage);
-            if (percentage % 10 === 0) { // Update toast less frequently to reduce UI lag
-              toast.loading(`Downloading AI model: ${percentage}%...`, { id: toastId });
-            }
-          }
-        }
-      };
-
-      let blob: Blob;
-      if (base64Image.startsWith('data:')) {
-        const base64Data = base64Image.split(',')[1];
-        const contentType = base64Image.match(/data:([^;]+);/)?.[1] || 'image/jpeg';
-        const byteCharacters = atob(base64Data);
-        const byteArrays = [];
-        for (let offset = 0; offset < byteCharacters.length; offset += 512) {
-          const slice = byteCharacters.slice(offset, offset + 512);
-          const byteNumbers = new Array(slice.length);
-          for (let i = 0; i < slice.length; i++) {
-            byteNumbers[i] = slice.charCodeAt(i);
-          }
-          byteArrays.push(new Uint8Array(byteNumbers));
-        }
-        blob = new Blob(byteArrays, { type: contentType });
-      } else {
-        const response = await fetch(base64Image);
-        blob = await response.blob();
-      }
-
-      const resultBlob = await removeBg(blob, config as any);
-
-      // Convert to DataURL and potentially sharpen
-      const resultDataUrl = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.readAsDataURL(resultBlob);
-      });
-
-      // Simple Canvas enhancement for "Crystal Clear" effect
-      return await enhanceImage(resultDataUrl);
-    } catch (error) {
-      console.error('Error removing background:', error);
-      toast.error('Failed to remove background: ' + (error instanceof Error ? error.message : 'Unknown error'), { id: toastId });
-      return null;
-    } finally {
-      setIsRemovingBackground(false);
-      setAiProgress(0);
-      toast.dismiss(toastId);
-    }
-  };
-
-  const enhanceImage = async (dataUrl: string): Promise<string> => {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d')!;
-        canvas.width = img.width;
-        canvas.height = img.height;
-
-        // Draw original
-        ctx.drawImage(img, 0, 0);
-
-        // Apply enhancement filters for "Crystal Clear" look
-        // We do this by drawing the canvas onto itself with filters
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = canvas.width;
-        tempCanvas.height = canvas.height;
-        const tempCtx = tempCanvas.getContext('2d')!;
-
-        tempCtx.filter = 'contrast(1.15) brightness(1.05) saturate(1.1) sharpness(1.2)'; // Sharpness is experimental, so we use convolution too
-        tempCtx.drawImage(canvas, 0, 0);
-
-        // Use better image smoothing
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(tempCanvas, 0, 0);
-
-        // Real convolution for sharpening
-        try {
-          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          const data = imageData.data;
-          const width = canvas.width;
-          const height = canvas.height;
-
-          // Sharpening kernel (Laplacian)
-          const weights = [0, -0.5, 0, -0.5, 3, -0.5, 0, -0.5, 0];
-          const side = 3;
-          const halfSide = 1;
-
-          const output = ctx.createImageData(width, height);
-          const outputData = output.data;
-
-          for (let y = 0; y < height; y++) {
-            for (let x = 0; x < width; x++) {
-              const dstOff = (y * width + x) * 4;
-              let r = 0, g = 0, b = 0;
-
-              for (let cy = 0; cy < side; cy++) {
-                for (let cx = 0; cx < side; cx++) {
-                  const scy = y + cy - halfSide;
-                  const scx = x + cx - halfSide;
-                  if (scy >= 0 && scy < height && scx >= 0 && scx < width) {
-                    const srcOff = (scy * width + scx) * 4;
-                    const wt = weights[cy * side + cx];
-                    r += data[srcOff] * wt;
-                    g += data[srcOff + 1] * wt;
-                    b += data[srcOff + 2] * wt;
-                  }
-                }
-              }
-              outputData[dstOff] = Math.min(255, Math.max(0, r));
-              outputData[dstOff + 1] = Math.min(255, Math.max(0, g));
-              outputData[dstOff + 2] = Math.min(255, Math.max(0, b));
-              outputData[dstOff + 3] = data[dstOff + 3];
-            }
-          }
-          ctx.putImageData(output, 0, 0);
-        } catch (e) {
-          console.warn('Enhancement failed, returning filtered original:', e);
-          ctx.drawImage(tempCanvas, 0, 0);
-        }
-
-        resolve(canvas.toDataURL('image/png', 0.98));
-      };
-      img.src = dataUrl;
-    });
-  };
-
-  const generateAIImage = async (title: string, description: string): Promise<string | null> => {
-    if (!title) {
-      toast.error('Please enter a title first');
-      return null;
-    }
-    setIsGeneratingAIImage(true);
-    setAiProgress(10); // Start with some progress
-    try {
-      const prompt = encodeURIComponent(
-        `${title} ${description || ''} professional product photo studio lighting clean white background`.trim()
-      );
-      const seed = Math.floor(Math.random() * 1000000);
-      const imageUrl = `https://image.pollinations.ai/prompt/${prompt}?width=1024&height=1024&nologo=true&seed=${seed}`;
-
-      setAiProgress(30);
-
-      // Load via Image element to bypass fetch-handler interceptor (avoids CORS/network errors)
-      return new Promise<string | null>((resolve) => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-
-        // Timeout after 30 seconds if pollinations is slow
-        const timeoutId = setTimeout(() => {
-          img.src = ''; // Cancel image load
-          setIsGeneratingAIImage(false);
-          setAiProgress(0);
-          toast.error('AI image generation timed out. Please try again.');
-          resolve(null);
-        }, 30000);
-
-        img.onload = () => {
-          clearTimeout(timeoutId);
-          setAiProgress(80);
-          try {
-            const canvas = document.createElement('canvas');
-            canvas.width = img.naturalWidth || 1024;
-            canvas.height = img.naturalHeight || 1024;
-            const ctx = canvas.getContext('2d')!;
-            ctx.drawImage(img, 0, 0);
-
-            setAiProgress(100);
-            setTimeout(() => {
-              setIsGeneratingAIImage(false);
-              setAiProgress(0);
-              resolve(canvas.toDataURL('image/jpeg', 0.95)); // Higher quality
-            }, 500);
-          } catch {
-            setIsGeneratingAIImage(false);
-            setAiProgress(0);
-            resolve(imageUrl);
-          }
-        };
-        img.onerror = () => {
-          clearTimeout(timeoutId);
-          setIsGeneratingAIImage(false);
-          setAiProgress(0);
-          toast.error('Failed to generate image. Try again or try a different title.');
-          resolve(null);
-        };
-        img.src = imageUrl;
-      });
-    } catch (error) {
-      console.error('Error generating AI image:', error);
-      setIsGeneratingAIImage(false);
-      setAiProgress(0);
-      toast.error('Failed to generate image');
-      return null;
-    }
-  };
+  const {
+    isRemovingBackground,
+    isGeneratingAIImage,
+    aiProgress,
+    processRemoveBackground,
+    generateAIImage
+  } = useAIImage();
 
 
   // File upload refs
@@ -478,10 +261,6 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
 
         // Load bookings for this shop
         const bookingsData = await getShopBookingsFromSupabase(shopId);
-
-        // Load featured products for the shop
-        const productsData = await getFeaturedProductsByShopId(shopId);
-        setFeaturedProducts(productsData);
 
         // Load shop offers for the shop
         const offersData = await getAllOffersByShopId(shopId);
@@ -595,11 +374,72 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
       };
 
       loadPendingOrders();
-      // Reload orders every 10 seconds
+      // Reload orders every 10 seconds (as fallback)
       const interval = setInterval(loadPendingOrders, 10000);
       return () => clearInterval(interval);
     }
   }, [selectedShop?.id, step]);
+
+  // Realtime Order Listener for instant "Ringing" (Option 2)
+  useEffect(() => {
+    if (step === 'portal' && selectedShop?.id) {
+      console.log('📡 Subscribing to real-time orders for shop:', selectedShop.id);
+      
+      const channel = supabase
+        .channel(`public:orders:shop_id=${selectedShop.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'orders',
+            filter: `shop_id=eq.${selectedShop.id}`
+          },
+          (payload) => {
+            console.log('🔔 REAL-TIME ORDER DETECTED!', payload);
+            
+            // 🚨 TRICK: Trigger Native Alarm Bridge for instant ringing
+            if (typeof window !== 'undefined' && (window as any).AlarmBridge) {
+              console.log('🚨 Triggering native alarm bridge via Realtime...');
+              try {
+                // Check if shop is open before ringing (as per user request)
+                if (selectedShop.isOpen) {
+                  const orderId = payload.new.id;
+                  
+                  // Method 1: Standard alarm
+                  if ((window as any).AlarmBridge.testAlarm) {
+                    (window as any).AlarmBridge.testAlarm(orderId, 1);
+                  }
+                  
+                  // Method 2: High-priority notification with sound (more reliable)
+                  if ((window as any).AlarmBridge.sendImportantNotification) {
+                    (window as any).AlarmBridge.sendImportantNotification({
+                      title: 'New Order! 🛍️',
+                      body: `Order #${payload.new.order_code || orderId.slice(0,6)} received!`,
+                      bookingId: orderId,
+                      orderId: orderId
+                    });
+                  }
+                } else {
+                  console.log('🔇 Shop is closed, skipping alarm');
+                }
+              } catch (e) {
+                console.error('Failed to trigger native alarm via Realtime:', e);
+              }
+            }
+            
+            // Refresh order count
+            setPendingOrdersCount(prev => prev + 1);
+            toast.success('New Order Received! 🛍️', { duration: 6000 });
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
+  }, [step, selectedShop?.id, selectedShop?.isOpen]);
 
   const handleShopSelect = (shop: Shop) => {
     setSelectedShop(shop);
@@ -1401,7 +1241,7 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
           <div className="flex flex-nowrap items-center gap-1 sm:gap-2 pb-2 no-scrollbar overflow-x-auto">
             {[
               { id: 'dashboard', label: 'Dashboard', icon: <Eye className="h-3 w-3 sm:h-4 sm:w-4" /> },
-              { id: 'bookings', label: 'Requests', icon: <Bell className="h-3 w-3 sm:h-4 sm:w-4" /> },
+              { id: 'bookings', label: 'Bookings', icon: <Bell className="h-3 w-3 sm:h-4 sm:w-4" />, hidden: selectedShop?.isTokenBookingEnabled === false },
               { id: 'orders', label: 'Orders', icon: <ShoppingCart className="h-3 w-3 sm:h-4 sm:w-4" /> },
               { id: 'products', label: 'Products', icon: <Package className="h-3 w-3 sm:h-4 sm:w-4" /> },
               { id: 'offers', label: 'Offers', icon: <Zap className="h-3 w-3 sm:h-4 sm:w-4" /> },
@@ -1412,7 +1252,7 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
               { id: 'preview', label: 'Preview', icon: <Eye className="h-3 w-3 sm:h-4 sm:w-4" />, restricted: isTabRestricted('preview') },
               { id: 'website', label: 'Website', icon: <GlobeIcon className="h-3 w-3 sm:h-4 sm:w-4" />, restricted: isTabRestricted('website') },
               { id: 'khata-book', label: 'Khata', icon: <Book className="h-3 w-3 sm:h-4 sm:w-4" />, restricted: isTabRestricted('khata-book') },
-            ].map((tab) => {
+            ].filter(tab => !tab.hidden).map((tab) => {
               const isActive = currentTab === tab.id;
               return (
                 <Button
@@ -1682,9 +1522,8 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
                       </CardContent>
                     </Card>
                   ) : (
-                    <IncomingBookingRequests
+                    <SimpleBookingManager
                       shopId={selectedShop.id}
-                      timeSlotSettings={selectedShop.timeSlotSettings}
                     />
                   )}
                 </div>
@@ -3048,327 +2887,8 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
               )}
 
               {currentTab === 'products' && selectedShop && (
-                <div className="space-y-6 pb-24 sm:pb-8 relative">
-                  {/* Premium Form Section */}
-                  <Card className={`overflow-hidden border-0 shadow-xl rounded-[24px] ${currentPlan?.plan_name === 'free' ? 'bg-amber-50/50' : 'bg-white dark:bg-slate-900/50 backdrop-blur-md'}`}>
-                    <div className="bg-gradient-to-r from-red-500 to-rose-600 p-4 sm:p-6 text-white">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h2 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
-                            <Package className="h-6 w-6" />
-                            Featured Products
-                          </h2>
-                          <p className="text-xs text-white/80 mt-1">Manage your storefront highlights</p>
-                        </div>
-                        {currentPlan?.plan_name === 'free' && (
-                          <Badge variant="secondary" className="bg-white/20 text-white border-0">
-                            <Lock className="h-3 w-3 mr-1" /> Basic Required
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-
-                    <CardContent className="p-4 sm:p-8 space-y-6">
-                      {currentPlan?.plan_name === 'free' ? (
-                        <div className="text-center py-10 space-y-4">
-                          <div className="bg-amber-100 dark:bg-amber-900/30 w-16 h-16 rounded-full flex items-center justify-center mx-auto">
-                            <Zap className="h-8 w-8 text-amber-600" />
-                          </div>
-                          <h3 className="text-lg font-bold text-slate-800 dark:text-white">Upgrade to Access</h3>
-                          <p className="text-sm text-slate-600 dark:text-slate-400 max-w-xs mx-auto">Featured products help you highlight bestsellers and increase sales by up to 40%.</p>
-                          <Button onClick={() => toast.error('Please upgrade to BASIC plan')} className="bg-amber-600 hover:bg-amber-700 rounded-xl px-8">
-                            Upgrade Now (₹99)
-                          </Button>
-                        </div>
-                      ) : (
-                        <div className="space-y-6">
-                          {/* Form Title */}
-                          <div className="flex items-center gap-2 border-b pb-4">
-                            <div className="h-8 w-1 bg-red-500 rounded-full" />
-                            <h3 className="text-base font-bold text-slate-800 dark:text-white">
-                              {editingProduct ? 'Edit Product Details' : 'Add New Highlight'}
-                            </h3>
-                          </div>
-
-                          <div className="space-y-5">
-                            {/* Product Title */}
-                            <div className="space-y-1.5">
-                              <Label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Product Name</Label>
-                              <Input
-                                placeholder="e.g. Fresh Milk 1L"
-                                value={newFeaturedProduct.title}
-                                onChange={(e) => setNewFeaturedProduct({ ...newFeaturedProduct, title: e.target.value })}
-                                className="h-12 rounded-xl bg-slate-50 border-slate-200 focus:bg-white focus:ring-red-500/20 text-base font-medium"
-                              />
-                            </div>
-
-                            {/* Pricing Section */}
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="space-y-1.5">
-                                <Label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Sale Price</Label>
-                                <div className="relative">
-                                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">₹</span>
-                                  <Input
-                                    type="number"
-                                    placeholder="200"
-                                    value={newFeaturedProduct.price}
-                                    onChange={(e) => setNewFeaturedProduct({ ...newFeaturedProduct, price: e.target.value })}
-                                    className="h-12 pl-7 rounded-xl bg-slate-50 border-slate-200 text-base font-bold text-red-600"
-                                  />
-                                </div>
-                              </div>
-                              <div className="space-y-1.5">
-                                <Label className="text-xs font-bold text-slate-500 uppercase tracking-tight">MRP Price</Label>
-                                <div className="relative">
-                                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">₹</span>
-                                  <Input
-                                    type="number"
-                                    placeholder="240"
-                                    value={newFeaturedProduct.originalPrice}
-                                    onChange={(e) => setNewFeaturedProduct({ ...newFeaturedProduct, originalPrice: e.target.value })}
-                                    className="h-12 pl-7 rounded-xl bg-slate-50 border-slate-200 text-base font-medium text-slate-400"
-                                  />
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Stats & Category */}
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="space-y-1.5">
-                                <Label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Stock</Label>
-                                <Input
-                                  type="number"
-                                  placeholder="50"
-                                  value={newFeaturedProduct.inventory}
-                                  onChange={(e) => setNewFeaturedProduct({ ...newFeaturedProduct, inventory: e.target.value })}
-                                  className="h-12 rounded-xl bg-slate-50 border-slate-200 text-base font-medium"
-                                />
-                              </div>
-                              <div className="space-y-1.5">
-                                <Label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Discount %</Label>
-                                <Input
-                                  type="number"
-                                  placeholder="15%"
-                                  value={newFeaturedProduct.discountPercentage}
-                                  onChange={(e) => setNewFeaturedProduct({ ...newFeaturedProduct, discountPercentage: e.target.value })}
-                                  className="h-12 rounded-xl bg-slate-50 border-slate-200 text-base font-medium"
-                                />
-                              </div>
-                            </div>
-
-                            {/* Category Select */}
-                            <div className="space-y-1.5">
-                              <Label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Category</Label>
-                              <select
-                                value={newFeaturedProduct.category}
-                                onChange={(e) => setNewFeaturedProduct({ ...newFeaturedProduct, category: e.target.value })}
-                                className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50 text-base font-medium focus:ring-2 focus:ring-red-500/20"
-                              >
-                                <option value="">Auto-categorize</option>
-                                <option value="dairy">Dairy & Bakery</option>
-                                <option value="snacks">Snacks & Munchies</option>
-                                <option value="beverages">Cold Drinks & Juices</option>
-                                <option value="instant">Instant Food</option>
-                                <option value="grocery">Atta, Rice & Dal</option>
-                                <option value="household">Cleaning & Household</option>
-                                <option value="personal">Personal Care</option>
-                                <option value="other">Other</option>
-                              </select>
-                            </div>
-
-                            {/* Advanced Image Upload Section */}
-                            <div className="space-y-3">
-                              <Label className="text-xs font-bold text-slate-500 uppercase tracking-tight">Product Image</Label>
-                              <div className="flex gap-4 items-center">
-                                {newFeaturedProduct.imageUrl ? (
-                                  <div className="relative">
-                                    <div className="w-32 h-32 rounded-2xl overflow-hidden border-2 border-red-500/20 bg-white shadow-lg group">
-                                      <img
-                                        src={newFeaturedProduct.imageUrl}
-                                        alt="Product"
-                                        className={`h-full w-full object-contain transition-all duration-300 ${(isRemovingBackground || isGeneratingAIImage) ? 'blur-sm scale-90' : 'group-hover:scale-110'}`}
-                                      />
-                                      {(isRemovingBackground || isGeneratingAIImage) && (
-                                        <div className="absolute inset-0 flex items-center justify-center bg-white/50">
-                                          <Loader2 className="h-6 w-6 animate-spin text-red-500" />
-                                        </div>
-                                      )}
-                                    </div>
-                                    <button
-                                      type="button"
-                                      onClick={() => setUploadMenu({ isOpen: true, type: 'product' })}
-                                      className="absolute -bottom-2 -right-2 bg-red-600 text-white p-2.5 rounded-full shadow-xl hover:scale-110 transition-transform active:scale-95"
-                                    >
-                                      <Camera className="h-4 w-4" />
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => setUploadMenu({ isOpen: true, type: 'product' })}
-                                    className="w-32 h-32 flex flex-col items-center justify-center bg-slate-50 border-2 border-dashed border-slate-300 rounded-2xl hover:border-red-500 hover:bg-red-50/30 transition-all group"
-                                  >
-                                    <div className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
-                                      <Upload className="h-5 w-5 text-slate-400 group-hover:text-red-500" />
-                                    </div>
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Upload Image</span>
-                                  </button>
-                                )}
-
-                                <div className="flex flex-col gap-2 flex-1">
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    className="rounded-xl h-10 border-indigo-200 text-indigo-600 hover:bg-indigo-50 font-bold"
-                                    onClick={async () => { const g = await generateAIImage(newFeaturedProduct.title, ''); if (g) setNewFeaturedProduct({ ...newFeaturedProduct, imageUrl: g }); }}
-                                    disabled={isGeneratingAIImage || !newFeaturedProduct.title}
-                                  >
-                                    <Sparkles className="h-4 w-4 mr-2" /> AI GENERATE
-                                  </Button>
-                                  {newFeaturedProduct.imageUrl && (
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      className="rounded-xl h-10 border-red-200 text-red-600 hover:bg-red-50 font-bold"
-                                      onClick={async () => { const p = await processRemoveBackground(newFeaturedProduct.imageUrl); if (p) setNewFeaturedProduct({ ...newFeaturedProduct, imageUrl: p }); }}
-                                      disabled={isRemovingBackground}
-                                    >
-                                      <Eraser className="h-4 w-4 mr-2" /> CLEAN BG
-                                    </Button>
-                                  )}
-                                  <p className="text-[9px] text-slate-400 italic px-1 leading-tight">
-                                    Pro-tip: Clear backgrounds make your products look 2x more premium!
-                                  </p>
-                                </div>
-                              </div>
-                              <input ref={productImageInputRef} type="file" accept="image/*" onChange={(e) => handleImageUpload(e, 'product')} className="hidden" />
-                              <input ref={productCameraInputRef} type="file" accept="image/*" capture="environment" onChange={(e) => handleImageUpload(e, 'product')} className="hidden" />
-                            </div>
-                          </div>
-
-                          {/* Sticky Bottom CTA for Mobile */}
-                          <div className="fixed bottom-4 left-4 right-4 z-40 sm:static sm:bottom-auto sm:left-auto sm:right-auto">
-                            {editingProduct ? (
-                              <div className="flex gap-2">
-                                <Button
-                                  onClick={handleUpdateFeaturedProduct}
-                                  className="flex-1 h-14 sm:h-12 rounded-2xl bg-gradient-to-r from-red-600 to-rose-600 text-white font-bold shadow-xl shadow-red-200 text-base active:scale-95 transition-transform"
-                                >
-                                  <CheckCircle className="mr-2 h-5 w-5" /> Update Changes
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  onClick={() => { setEditingProduct(null); setNewFeaturedProduct({ title: '', price: '', originalPrice: '', discountPercentage: '', category: '', imageUrl: '', inventory: '' }); }}
-                                  className="h-14 sm:h-12 px-6 rounded-2xl border-slate-200 bg-white shadow-lg font-bold"
-                                >
-                                  Cancel
-                                </Button>
-                              </div>
-                            ) : (
-                              <Button
-                                onClick={handleAddFeaturedProduct}
-                                className="w-full h-14 sm:h-12 rounded-2xl bg-gradient-to-r from-red-600 to-rose-600 text-white font-bold shadow-xl shadow-red-200 text-lg active:scale-95 transition-transform"
-                              >
-                                <Plus className="mr-2 h-6 w-6" /> Add Product to Store
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-
-                  {/* Product Inventory Section */}
-                  {featuredProducts.length > 0 && (
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between px-2">
-                        <div className="flex items-center gap-2">
-                          <div className="bg-red-500 p-1.5 rounded-lg">
-                            <Package className="h-4 w-4 text-white" />
-                          </div>
-                          <h4 className="font-black text-sm text-slate-800 uppercase tracking-tighter">
-                            Live Inventory ({featuredProducts.length})
-                          </h4>
-                        </div>
-                        <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-full uppercase">
-                          Last Sync: Just now
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
-                        {featuredProducts.map((product) => (
-                          <div
-                            key={product.id}
-                            className="group relative flex flex-col bg-white dark:bg-slate-900 rounded-[20px] shadow-sm hover:shadow-xl transition-all duration-300 border border-slate-100 dark:border-slate-800 overflow-hidden"
-                          >
-                            {/* Action Buttons Overlay */}
-                            <div className="absolute top-2 right-2 flex flex-col gap-1.5 z-10 opacity-0 group-hover:opacity-100 translate-x-4 group-hover:translate-x-0 transition-all duration-300">
-                              <button
-                                onClick={() => handleEditProduct(product)}
-                                className="bg-white/90 dark:bg-slate-800/90 text-indigo-600 p-2 rounded-full shadow-lg hover:bg-indigo-600 hover:text-white transition-colors"
-                                title="Edit Product"
-                              >
-                                <Edit className="h-3.5 w-3.5" />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteFeaturedProduct(product.id)}
-                                className="bg-white/90 dark:bg-slate-800/90 text-red-600 p-2 rounded-full shadow-lg hover:bg-red-600 hover:text-white transition-colors"
-                                title="Delete Product"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
-
-                            {/* Product Image Section */}
-                            <div className="relative aspect-square overflow-hidden bg-white p-2">
-                              <img
-                                src={product.imageUrl}
-                                alt={product.title}
-                                className="h-full w-full object-contain group-hover:scale-110 transition-transform duration-500"
-                              />
-
-                              {/* Stock Badge */}
-                              <div className={`absolute bottom-2 left-2 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider shadow-sm ${parseInt(product.inventory || '0') > 10 ? 'bg-emerald-500 text-white' : 'bg-amber-500 text-white'}`}>
-                                Stock: {product.inventory || '0'}
-                              </div>
-
-                              {/* Discount Badge */}
-                              {product.discountPercentage && (
-                                <div className="absolute top-0 left-0 bg-red-600 text-white text-[10px] font-black px-3 py-1 rounded-br-xl shadow-lg">
-                                  {product.discountPercentage}% OFF
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Product Info */}
-                            <div className="p-3 sm:p-4 flex flex-col flex-1 border-t border-slate-50 dark:border-slate-800">
-                              <span className="text-[9px] font-bold text-slate-400 uppercase mb-1">{product.category || 'Grocery'}</span>
-                              <h5 className="font-bold text-xs sm:text-sm line-clamp-2 text-slate-800 dark:text-slate-200 mb-2 min-h-[32px] leading-tight">
-                                {product.title}
-                              </h5>
-
-                              <div className="mt-auto flex items-end justify-between">
-                                <div className="flex flex-col">
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-sm sm:text-base font-black text-red-600">₹{product.price}</span>
-                                    {product.originalPrice && (
-                                      <span className="text-[10px] text-slate-400 line-through decoration-slate-400/50">₹{product.originalPrice}</span>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="h-7 w-7 rounded-full bg-slate-50 flex items-center justify-center sm:hidden">
-                                  <Edit className="h-3 w-3 text-slate-400" />
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
+                <ProductsTab selectedShop={selectedShop} currentPlan={currentPlan} />
               )}
-
               {currentTab === 'offers' && selectedShop && (
                 <div className="space-y-4 sm:space-y-6 pb-6">
                   <Card className={currentPlan?.plan_name === 'free' ? 'border-amber-200 bg-amber-50' : ''}>
@@ -3523,7 +3043,34 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
                           </Button>
                         )}
                       </div>
-                      {selectedShop && <CampaignHistory shopId={selectedShop.id} />}
+
+                      {/* Sub-tabs for Sent vs Received */}
+                      <div className="flex gap-2 border-b border-slate-200 dark:border-slate-800 pb-2">
+                        <Button
+                          variant={campaignSubTab === 'sent' ? 'default' : 'ghost'}
+                          onClick={() => setCampaignSubTab('sent')}
+                          size="sm"
+                          className="text-xs"
+                        >
+                          Sent Campaigns
+                        </Button>
+                        <Button
+                          variant={campaignSubTab === 'received' ? 'default' : 'ghost'}
+                          onClick={() => setCampaignSubTab('received')}
+                          size="sm"
+                          className="text-xs"
+                        >
+                          Received Campaigns
+                        </Button>
+                      </div>
+
+                      {selectedShop && (
+                        campaignSubTab === 'sent' ? (
+                          <CampaignHistory shopId={selectedShop.id} />
+                        ) : (
+                          <ReceivedCampaignsList />
+                        )
+                      )}
                     </>
                   )}
                 </div>

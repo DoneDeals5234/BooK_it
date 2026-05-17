@@ -50,7 +50,12 @@ export const addComment = async (
         sendNativeNotification([video.uploader_id], {
           title: '💬 New Comment on Your Video!',
           body: `${uploaderName}: "${commentText.slice(0, 60)}${commentText.length > 60 ? '...' : ''}"`,
-          data: { type: 'video_comment', video_id: videoId, route: '/videos' }
+          data: { 
+            type: 'video_comment', 
+            video_id: videoId, 
+            route: '/videos',
+            imageUrl: uploaderImageUrl // Include image for rich notification
+          }
         }).catch(console.error);
       }
     } catch (notifyErr) {

@@ -34,13 +34,15 @@ async function notifyShopOwnerNewOrder(order: Order): Promise<void> {
     const payload = {
       title: 'New Order Received! 🛍️',
       body: `New order for ₹${order.order_amount} from ${order.customer_name}. Click to view!`,
+      channelId: 'order_alerts_v1', // High priority channel with alarm sound
       data: {
         type: 'new_order',
         order_id: order.id,
         customer_name: order.customer_name,
         amount: order.order_amount.toString(),
         quantity: order.quantity.toString(),
-        delivery_type: order.delivery_type || 'pickup'
+        delivery_type: order.delivery_type || 'pickup',
+        ring: 'true' // Flag to trigger native alarm bridge
       }
     };
 

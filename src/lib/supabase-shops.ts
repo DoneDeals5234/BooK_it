@@ -403,64 +403,12 @@ export const seedDefaultShops = async (): Promise<void> => {
     }
 
     // Add default shops
-    const defaultShops = [
-      {
-        id: '1',
-        name: 'Classic Cuts Barber',
-        location: '123 Main Street, Downtown',
-        owner_name: 'John Smith',
-        owner_email: 'john.smith@example.com',
-        owner_phone: '+1-555-0101',
-        about: 'A classic barbershop offering traditional cuts and grooming services.',
-        shop_image_url: 'https://images.unsplash.com/photo-1621905251918-48416bd8575a?w=400&h=300&fit=crop',
-        location_image_url: 'https://images.unsplash.com/photo-1524136414933-a57106cb4df1?w=400&h=300&fit=crop',
-        location_map_link: 'https://maps.google.com',
-        password: '523452',
-        barber_members: JSON.stringify([
-          {
-            id: '1-1',
-            name: 'John Smith',
-            experience: '15 years',
-            imageUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop',
-          },
-        ]),
-        services: JSON.stringify([
-          { id: '1-s1', name: 'Haircut', price: '₹25' },
-          { id: '1-s2', name: 'Beard Trim', price: '₹15' },
-        ]),
-        is_open: true,
-        token_booking_paused: false,
-        category: 'salon',
-      },
-      {
-        id: '2',
-        name: 'Elite Barbershop',
-        location: '456 Oak Avenue, Midtown',
-        owner_name: 'Maria Garcia',
-        owner_email: 'maria.garcia@example.com',
-        owner_phone: '+1-555-0102',
-        about: 'Premium barbershop with expert stylists and modern techniques.',
-        shop_image_url: 'https://images.unsplash.com/photo-1585747860715-cd4628902d4a?w=400&h=300&fit=crop',
-        location_image_url: 'https://images.unsplash.com/photo-1554522149-5fb42f1a6cbe?w=400&h=300&fit=crop',
-        location_map_link: 'https://maps.google.com',
-        password: '523452',
-        barber_members: JSON.stringify([
-          {
-            id: '2-1',
-            name: 'Maria Garcia',
-            experience: '12 years',
-            imageUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&h=200&fit=crop',
-          },
-        ]),
-        services: JSON.stringify([
-          { id: '2-s1', name: 'Premium Haircut', price: '₹35' },
-          { id: '2-s2', name: 'Beard Design', price: '₹20' },
-        ]),
-        is_open: true,
-        token_booking_paused: false,
-        category: 'salon',
-      },
-    ];
+    const defaultShops: any[] = [];
+
+    if (defaultShops.length === 0) {
+      console.log('No default shops to seed');
+      return;
+    }
 
     const { error: insertError } = await supabase.from('shops').insert(defaultShops);
 

@@ -110,9 +110,9 @@ serve(async (req: Request) => {
 
   try {
     const body = await req.json();
-    const { userIds, playerIds, title, body: messageBody, data: dataIn } = body;
+    const { userIds, playerIds, title, body: messageBody, data: dataIn, channelId } = body;
 
-    console.log("📱 FCM notification request received:", { title, userIdsCount: userIds?.length });
+    console.log("📱 FCM notification request received:", { title, userIdsCount: userIds?.length, channelId });
 
     // Initialize Supabase client with SERVICE ROLE to bypass RLS
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
@@ -156,6 +156,11 @@ serve(async (req: Request) => {
         const accessToken = await getFcmAccessToken();
         const FCM_API_URL = `https://fcm.googleapis.com/v1/projects/${FCM_PROJECT_ID}/messages:send`;
         
+        // Use high_priority_v3 as the global fallback to ensure heads-up display.
+        // We use v3 to bypass any previous OS-level channel settings that might have been glitched.
+        const isChat = fcmData?.type?.includes('chat');
+        const fallbackChannel = isChat ? "chat_popup_v3" : "high_priority_v3";
+        
         const messagePayload: any = {
           message: {
             token: token,
@@ -164,7 +169,7 @@ serve(async (req: Request) => {
               priority: "HIGH",
               notification: { 
                 sound: "default", 
-                channel_id: "default", 
+                channel_id: channelId || fallbackChannel, 
                 click_action: "OPEN_ACTIVITY"
               },
             },

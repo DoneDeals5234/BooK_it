@@ -428,10 +428,15 @@ export async function syncHomeState(isAtHome: boolean): Promise<void> {
       return;
     }
 
-    console.log(`🏠 Native Sync (Plugin): isAtHome = ${isAtHome}`);
+    console.log(`🏠 Native Sync (Bridge): isAtHome = ${isAtHome}`);
     
-    // Use the official Capacitor Plugin method (Guaranteed to work)
-    await (Capacitor.Plugins as any).AlarmScheduler.syncHomeState({ isAtHome });
+    // Use the JavaScript bridge (AndroidBridge) registered in MainActivity.kt
+    if (window.AndroidBridge && typeof window.AndroidBridge.syncHomeState === 'function') {
+      window.AndroidBridge.syncHomeState(isAtHome);
+      console.log('✅ syncHomeState sent via AndroidBridge');
+    } else {
+      console.warn('⚠️ AndroidBridge.syncHomeState not available');
+    }
     
   } catch (error) {
     console.warn('⚠️ Error syncing home state:', error);

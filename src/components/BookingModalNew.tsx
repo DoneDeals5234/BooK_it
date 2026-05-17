@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { ArrowLeft, Clock, Bell, CheckCircle2, Loader } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -22,22 +23,25 @@ interface BookingModalNewProps {
   shop: Shop;
   onClose: () => void;
   onBookingCreated?: () => void;
+  initialService?: Service;
 }
 
 export const BookingModalNew = ({
   shop,
   onClose,
   onBookingCreated,
+  initialService,
 }: BookingModalNewProps) => {
   const { user } = useAuth();
   const { profile } = useUserProfile();
 
-  const [step, setStep] = useState<BookingStep>('service');
-  const [selectedService, setSelectedService] = useState<Service | null>(null);
+  const [step, setStep] = useState<BookingStep>(initialService ? 'time-slot' : 'service');
+  const [selectedService, setSelectedService] = useState<Service | null>(initialService || null);
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>('');
   const [availableTimeSlots, setAvailableTimeSlots] = useState<string[]>([]);
   const [reminderMinutes, setReminderMinutes] = useState<string>('30');
   const [loading, setLoading] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<string>(getCurrentISTDate());
   const [loadingSlots, setLoadingSlots] = useState(false);
 
   if (!shop.isOpen || shop.tokenBookingPaused || shop.isTokenBookingEnabled === false) {
@@ -72,7 +76,7 @@ export const BookingModalNew = ({
   const loadAvailableSlots = async () => {
     setLoadingSlots(true);
     try {
-      const bookingDate = getCurrentISTDate();
+      const bookingDate = selectedDate;
       const allSlots = getAllTimeSlots();
       const available: string[] = [];
 
@@ -92,7 +96,7 @@ export const BookingModalNew = ({
 
   useEffect(() => {
     if (step === 'time-slot') loadAvailableSlots();
-  }, [step]);
+  }, [step, selectedDate]);
 
   const handleServiceSelect = (service: Service) => {
     setSelectedService(service);
@@ -120,11 +124,12 @@ export const BookingModalNew = ({
 
     setLoading(true);
     try {
-      const bookingDate = getCurrentISTDate();
+      const bookingDate = selectedDate;
       const tokenNumber = await getNextTokenNumberFromSupabase(shop.id);
 
       const bookingData = {
         shop_id: shop.id,
+        shop_name: shop.name,
         service_name: selectedService.name,
         service_price: selectedService.price,
         time_slot: selectedTimeSlot,
@@ -256,8 +261,8 @@ export const BookingModalNew = ({
     try {
       // Notify customer
       await sendNativeNotification([user?.uid || ''], {
-        title: '✅ Booking Confirmed',
-        body: `Your booking for ${serviceName} at ${shop.name} is confirmed at ${selectedTimeSlot}.`
+        title: '✅ Booking Successful',
+        body: `Your booking for ${serviceName} at ${shop.name} on ${selectedDate} at ${selectedTimeSlot} is successful.`
       });
 
       // Notify shop owner
@@ -265,7 +270,7 @@ export const BookingModalNew = ({
       if (owners?.[0]?.user_id) {
         await sendNativeNotification([owners[0].user_id], {
           title: '📌 New Booking',
-          body: `New booking from ${profile?.name || 'Customer'} for ${serviceName} at ${selectedTimeSlot}`
+          body: `New booking from ${profile?.name || 'Customer'} for ${serviceName} on ${selectedDate} at ${selectedTimeSlot}`
         });
       }
     } catch (error) {}
@@ -306,7 +311,21 @@ export const BookingModalNew = ({
 
           {step === 'time-slot' && (
             <div className="space-y-4">
-              <Label className="text-lg font-semibold flex items-center gap-2"><Clock className="h-5 w-5" />Select Time Slot</Label>
+              <Label className="text-lg font-semibold flex items-center gap-2"><Clock className="h-5 w-5" />Select Date & Time Slot</Label>
+              
+              {/* Date Picker */}
+              <div className="space-y-2">
+                <Label htmlFor="booking-date" className="text-sm font-medium">Date</Label>
+                <Input
+                  id="booking-date"
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  min={getCurrentISTDate()}
+                  className="w-full"
+                />
+              </div>
+
               {loadingSlots ? <div className="flex justify-center py-8"><Loader className="h-6 w-6 animate-spin text-blue-500" /></div> : 
                availableTimeSlots.length > 0 ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -314,7 +333,7 @@ export const BookingModalNew = ({
                     <Button key={slot} variant={selectedTimeSlot === slot ? 'default' : 'outline'} onClick={() => handleTimeSlotSelect(slot)} className="h-12">{slot}</Button>
                   ))}
                 </div>
-              ) : <p className="text-center text-muted-foreground py-8">No available slots for today.</p>}
+              ) : <p className="text-center text-muted-foreground py-8">No available slots for {selectedDate === getCurrentISTDate() ? 'today' : selectedDate}.</p>}
             </div>
           )}
 
@@ -336,7 +355,9 @@ export const BookingModalNew = ({
             <div className="space-y-4">
               <Label className="text-lg font-semibold">Confirm Your Booking</Label>
               <Card className="p-4 space-y-3 bg-gray-50">
+                <div className="flex justify-between"><span>Customer:</span><span className="font-semibold">{profile?.name || 'Customer'}</span></div>
                 <div className="flex justify-between"><span>Service:</span><span className="font-semibold">{selectedService?.name}</span></div>
+                <div className="flex justify-between"><span>Date:</span><span className="font-semibold">{selectedDate}</span></div>
                 <div className="flex justify-between"><span>Time:</span><span className="font-semibold">{selectedTimeSlot}</span></div>
                 <div className="flex justify-between"><span>Reminder:</span><span className="font-semibold">{reminderMinutes} min before</span></div>
               </Card>

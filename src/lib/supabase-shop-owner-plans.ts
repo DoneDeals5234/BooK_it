@@ -32,9 +32,10 @@ export const PLAN_DETAILS = {
       { name: 'Staff Members', included: true },
       { name: 'Time Slot Configuration', included: true },
       { name: 'Booking System', included: true },
+      { name: 'World Chat Access', included: true },
       { name: 'Campaigns', included: false },
-      { name: 'Featured Products', included: false },
-      { name: 'Shop Offers', included: false },
+      { name: 'Featured Products', included: true },
+      { name: 'Shop Offers', included: true },
       { name: 'Design Your Shop', included: false },
     ],
   },
@@ -51,7 +52,8 @@ export const PLAN_DETAILS = {
       { name: 'World Chat Access', included: true },
       { name: 'Personal DM Access', included: true },
       { name: 'Content Uploads', included: true },
-      { name: 'Design Your Shop', included: false },
+      { name: 'Design Your Shop', included: true },
+      { name: 'Campaigns', included: true },
       { name: 'Target Other Locations', included: false },
     ],
   },
@@ -68,8 +70,9 @@ export const PLAN_DETAILS = {
       { name: 'World Chat Access', included: true },
       { name: 'Personal DM Access', included: true },
       { name: 'Design Your Shop', included: true },
+      { name: 'Campaigns', included: true },
       { name: 'Target Other Locations', included: false },
-      { name: 'Website Builder', included: false },
+      { name: 'Website Builder', included: true },
     ],
   },
   premium: {
@@ -78,6 +81,7 @@ export const PLAN_DETAILS = {
     priceDisplay: '₹499',
     subtitle: 'One-Time Fee',
     color: '#6b46c1', // Purple from image
+    locked: true, // Plan is locked and cannot be purchased
     features: [
       { name: 'City-Only Notifications', included: true },
       { name: 'Register Your Shop', included: true },
@@ -85,7 +89,7 @@ export const PLAN_DETAILS = {
       { name: 'World Chat Access', included: true },
       { name: 'Personal DM Access', included: true },
       { name: 'Target Any Location', included: true },
-      { name: 'Website Builder', included: false },
+      { name: 'Website Builder', included: true },
     ],
   },
 };

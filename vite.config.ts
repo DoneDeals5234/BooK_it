@@ -14,6 +14,9 @@ export default defineConfig({
     strictPort: false,
     host: true,
     allowedHosts: true,
+    watch: {
+      ignored: ['**/android/**']
+    }
   },
   build: {
     rollupOptions: {

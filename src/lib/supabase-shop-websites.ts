@@ -2,7 +2,7 @@ import { supabase } from '@/lib/supabase';
 
 export interface WebsiteComponent {
   id: string;
-  type: 'text' | 'image' | 'button' | 'divider' | 'gallery' | 'services' | 'reviews';
+  type: 'text' | 'image' | 'button' | 'divider' | 'gallery' | 'services' | 'reviews' | 'products' | 'navbar';
   content: any; // string (text/url) or array (gallery)
   styles: {
     fontSize?: number;
@@ -14,12 +14,14 @@ export interface WebsiteComponent {
     height?: string;
     borderRadius?: number;
     fontWeight?: 'normal' | 'bold' | 'bolder';
+    fontFamily?: string;
   };
   position: {
     x: number;
     y: number;
     order: number; // for vertical stacking
   };
+  linkTo?: string; // Page ID or external URL
 }
 
 export interface ShopWebsite {
@@ -179,6 +181,53 @@ export const getWebsiteBySlug = async (slug: string) => {
     }
   }
 
+  return data || null;
+};
+
+export const getWebsiteBySubdomainOrDomain = async (subdomainOrDomain: string) => {
+  console.log('🔍 Fetching website for subdomain or domain:', subdomainOrDomain);
+
+  let query = supabase.from('shop_websites').select('*').eq('is_published', true);
+
+  if (subdomainOrDomain.startsWith('custom:')) {
+    const domain = subdomainOrDomain.replace('custom:', '');
+    query = query.eq('custom_domain', domain);
+  } else {
+    const { data, error } = await supabase
+      .from('shop_websites')
+      .select('*')
+      .eq('is_published', true)
+      .or(`custom_subdomain.eq."${subdomainOrDomain}",shop_name.eq."${subdomainOrDomain}"`)
+      .maybeSingle();
+
+    if (error) {
+      console.error('❌ Error fetching website by subdomain:', error);
+      throw error;
+    }
+
+    if (data && data.layout_json && typeof data.layout_json === 'string') {
+      try {
+        data.layout_json = JSON.parse(data.layout_json);
+      } catch (e) {
+        console.warn('⚠️ Could not parse layout_json:', e);
+      }
+    }
+    return data || null;
+  }
+
+  const { data, error } = await query.maybeSingle();
+  if (error) {
+    console.error('❌ Error fetching website by custom domain:', error);
+    throw error;
+  }
+
+  if (data && data.layout_json && typeof data.layout_json === 'string') {
+    try {
+      data.layout_json = JSON.parse(data.layout_json);
+    } catch (e) {
+      console.warn('⚠️ Could not parse layout_json:', e);
+    }
+  }
   return data || null;
 };
 

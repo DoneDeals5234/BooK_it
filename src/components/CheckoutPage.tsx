@@ -134,7 +134,7 @@ export default function CheckoutPage() {
       const result = await createOrder(orderData);
       if (result) {
         toast.success("Order placed successfully!");
-        navigate('/profile?tab=orders');
+        navigate('/profile?tab=orders&expanded=true');
       }
     } catch (error) {
       toast.error("Failed to place order");

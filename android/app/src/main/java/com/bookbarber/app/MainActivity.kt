@@ -64,16 +64,66 @@ class MainActivity : BridgeActivity() {
 
     private fun createDefaultNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val notificationManager: android.app.NotificationManager =
+                getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+
+            // Default Channel
             val name = "Default"
             val descriptionText = "Default notifications"
             val importance = NotificationManager.IMPORTANCE_HIGH
             val channel = android.app.NotificationChannel("default", name, importance).apply {
                 description = descriptionText
             }
-            val notificationManager: android.app.NotificationManager =
-                getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
             notificationManager.createNotificationChannel(channel)
-            Log.d(TAG, "✅ Default notification channel created")
+            
+            // 1. Chat Popup Channel (The one that was confirmed working)
+            val chatChannel = android.app.NotificationChannel(
+                "chat_popup_channel", 
+                "Chat Messages", 
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "High priority chat notifications"
+            }
+            notificationManager.createNotificationChannel(chatChannel)
+            
+            // 2. High Priority Channel (For all other notifications)
+            val highPriorityChannel = android.app.NotificationChannel(
+                "high_priority_channel", 
+                "Important Notifications", 
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "System updates and orders"
+            }
+            notificationManager.createNotificationChannel(highPriorityChannel)
+
+            // 🟢 NEW CHANNEL: high_priority_v3 (To bypass any previous channel glitches)
+            val v3Channel = android.app.NotificationChannel(
+                "high_priority_v3",
+                "Important Alerts",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Critical app alerts and campaign notifications"
+                enableLights(true)
+                enableVibration(true)
+                setShowBadge(true)
+                lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+            }
+            notificationManager.createNotificationChannel(v3Channel)
+
+            // 🟢 NEW CHANNEL: chat_popup_v3 (Fresh chat channel)
+            val chatV3Channel = android.app.NotificationChannel(
+                "chat_popup_v3",
+                "Chat Messages (New)",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Direct messages from shops and users"
+                enableLights(true)
+                enableVibration(true)
+                setShowBadge(true)
+            }
+            notificationManager.createNotificationChannel(chatV3Channel)
+
+            Log.d(TAG, "✅ Notification channels created (including v3 high priority)")
         }
     }
 
@@ -341,7 +391,13 @@ class MainActivity : BridgeActivity() {
         @JavascriptInterface
         fun setAtHome(atHome: Boolean) {
             MainActivity.isAtHomeState = atHome
-            Log.i(TAG, "🏠 Home state updated from JS: $atHome")
+            Log.i(TAG, "🏠 Home state updated (setAtHome) from JS: $atHome")
+        }
+
+        @JavascriptInterface
+        fun syncHomeState(atHome: Boolean) {
+            MainActivity.isAtHomeState = atHome
+            Log.i(TAG, "🏠 Home state updated (syncHomeState) from JS: $atHome")
         }
 
         @JavascriptInterface

@@ -41,6 +41,8 @@ export const CampaignBuilder = ({ onClose, shopId, onCampaignCreated }: Campaign
   const [uploadingImage, setUploadingImage] = useState(false);
   const [currentPlan, setCurrentPlan] = useState<ShopOwnerPlan | null>(null);
   const [isPlanRestricted, setIsPlanRestricted] = useState(false);
+  const [matchedUsersCount, setMatchedUsersCount] = useState<number | null>(null);
+  const [calculatingAudience, setCalculatingAudience] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const { user } = useAuth();
 
@@ -73,6 +75,36 @@ export const CampaignBuilder = ({ onClose, shopId, onCampaignCreated }: Campaign
 
     fetchPlanAndShop();
   }, [user?.email, shopId]);
+
+  useEffect(() => {
+    const fetchAudienceCount = async () => {
+      // Run on all steps so owner knows reach early
+      setCalculatingAudience(true);
+      try {
+        let query = supabase.from('user_profiles').select('user_id', { count: 'exact', head: true });
+        
+        if (target.country) query = query.eq('country', target.country);
+        if (target.state) query = query.eq('state', target.state);
+        if (target.district) query = query.eq('district', target.district);
+        if (target.village) query = query.eq('village', target.village);
+
+        const { count, error } = await query;
+        if (!error) {
+          setMatchedUsersCount(count);
+        }
+      } catch (err) {
+        console.error('Error calculating audience:', err);
+      } finally {
+        setCalculatingAudience(false);
+      }
+    };
+
+    const timer = setTimeout(() => {
+      fetchAudienceCount();
+    }, 500); // Debounce to avoid too many requests
+
+    return () => clearTimeout(timer);
+  }, [target, step]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -402,6 +434,25 @@ export const CampaignBuilder = ({ onClose, shopId, onCampaignCreated }: Campaign
                 Next
               </Button>
             </div>
+
+            {/* NEW: Immediate Audience Reach Indicator */}
+            <div className="mt-4 bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="bg-primary/10 p-2 rounded-full">
+                  <Zap className="h-4 w-4 text-primary" />
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider font-bold text-slate-500">Current Reach</p>
+                  <p className="text-sm font-bold text-slate-900">Targeting {target.village || target.district || target.state || 'Selected Area'}</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-lg font-black text-primary leading-none">
+                  {calculatingAudience ? '...' : (matchedUsersCount || 0)}
+                </p>
+                <p className="text-[10px] font-bold text-slate-500">Users</p>
+              </div>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -448,6 +499,24 @@ export const CampaignBuilder = ({ onClose, shopId, onCampaignCreated }: Campaign
             ) : (
               <CampaignTargetSelector target={target} onChange={setTarget} />
             )}
+
+            <div className="bg-blue-50 text-blue-800 p-4 rounded-lg flex items-center justify-between border border-blue-200">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">👥</span>
+                <div>
+                  <p className="font-semibold text-sm">Estimated Audience</p>
+                  <p className="text-xs text-blue-600">Users matching this location</p>
+                </div>
+              </div>
+              <div className="text-2xl font-bold">
+                {calculatingAudience ? (
+                  <span className="animate-pulse">...</span>
+                ) : (
+                  matchedUsersCount !== null ? matchedUsersCount : 'N/A'
+                )}
+              </div>
+            </div>
+
             <div className="flex gap-2">
               <Button
                 onClick={() => setStep('basic')}
@@ -530,6 +599,12 @@ export const CampaignBuilder = ({ onClose, shopId, onCampaignCreated }: Campaign
                 <div>
                   <p className="text-xs font-semibold text-muted-foreground">SCHEDULED FOR</p>
                   <p className="text-sm">{scheduledAt.toLocaleString()}</p>
+                </div>
+              )}
+              {matchedUsersCount !== null && (
+                <div className="pt-2 border-t border-muted-foreground/20">
+                  <p className="text-xs font-semibold text-blue-600">ESTIMATED REACH</p>
+                  <p className="text-sm font-bold text-blue-800">{matchedUsersCount} Users</p>
                 </div>
               )}
             </div>

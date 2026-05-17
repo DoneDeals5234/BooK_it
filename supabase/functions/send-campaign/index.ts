@@ -71,7 +71,11 @@ serve(async (req: Request) => {
         userIds,
         title: campaign.title,
         body: campaign.message,
-        data: { campaign_id, type: "campaign" }
+        data: { 
+          campaign_id, 
+          type: "campaign",
+          ...(campaign.image_url ? { imageUrl: campaign.image_url } : {})
+        }
       })
     });
 

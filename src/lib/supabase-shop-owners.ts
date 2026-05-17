@@ -247,3 +247,39 @@ export const getShopOwnersByShopId = async (shopId: string): Promise<ShopOwner[]
     return [];
   }
 };
+
+// Get all web shop owners from the entire system
+export const getAllShopOwners = async (): Promise<ShopOwner[]> => {
+  try {
+    console.log(`🔍 Fetching all web shop owners from the system`);
+    const { data, error } = await supabase
+      .from('shop_owners')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching all web shop owners:', error);
+      return [];
+    }
+
+    if (!data || data.length === 0) {
+      console.log(`⚠️ No web shop owners found in the system`);
+      return [];
+    }
+
+    const mapped = (data || []).map((item) => ({
+      id: item.id,
+      shopId: item.shop_id,
+      userId: item.user_id,
+      playerId: item.player_id,
+      email: item.email,
+      createdAt: new Date(item.created_at),
+      updatedAt: new Date(item.updated_at),
+    }));
+
+    return mapped;
+  } catch (error) {
+    console.error('Error in getAllShopOwners:', error);
+    return [];
+  }
+};

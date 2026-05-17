@@ -8,7 +8,7 @@ import { useUserProfile } from '@/contexts/UserProfileContext';
 import toast from 'react-hot-toast';
 import { getShops } from '@/lib/shops-storage';
 import { fetchUserLocation } from '@/lib/geolocation';
-import { initiateRazorpayPayment } from '@/lib/razorpay-payment';
+import { initiateCashfreePayment } from '@/lib/cashfree-payment';
 import { CreditCard, Store, CheckCircle, Check, Zap, X } from 'lucide-react';
 import { PLAN_DETAILS, type PlanName, type ShopOwnerPlan } from '@/lib/supabase-shop-owner-plans';
 
@@ -52,6 +52,7 @@ export const CreateShopModal = ({ open: controlledOpen, onOpenChange, onSuccess,
   const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [paymentEmail, setPaymentEmail] = useState('');
   const [selectedPlan, setSelectedPlan] = useState<PlanName | null>(null);
+  const [emailSubmitted, setEmailSubmitted] = useState(false);
   const { signUpAsShopOwner, user, aggregatedData } = useAuth();
   const { profile } = useUserProfile();
 
@@ -148,7 +149,7 @@ export const CreateShopModal = ({ open: controlledOpen, onOpenChange, onSuccess,
       const emailForPayment = paymentEmail || user?.email || '';
       const nameForPayment = profile?.name || user?.email?.split('@')[0] || 'User';
 
-      const success = await initiateRazorpayPayment(
+      const success = await initiateCashfreePayment(
         {
           amount: planDetails.price,
           description: `${isUpgrade ? 'Plan Upgrade' : 'Shop Owner Plan'} - ${planDetails.name} (${planDetails.priceDisplay})`,

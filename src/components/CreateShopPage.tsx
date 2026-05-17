@@ -9,7 +9,7 @@ import toast from 'react-hot-toast';
 import { ArrowLeft, Store, CheckCircle, Check, X, MapPin, Edit } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { fetchUserLocation } from '@/lib/geolocation';
-import { initiateRazorpayPayment } from '@/lib/razorpay-payment';
+import { initiateCashfreePayment } from '@/lib/cashfree-payment';
 import { PLAN_DETAILS, type PlanName, recordFreePlan } from '@/lib/supabase-shop-owner-plans';
 import { getShops } from '@/lib/shops-storage';
 import { invalidateAllCaches } from '@/lib/shops-cache';
@@ -78,8 +78,17 @@ export const CreateShopPage = () => {
     setLocationLoading(true);
     try {
       const location = await fetchUserLocation();
-      setLocationData(location);
-      const addressParts = [location.street, location.city, location.state, location.country].filter(Boolean);
+      const mappedLocation: LocationData = {
+        address: location.address,
+        street: location.village,
+        city: location.district,
+        state: location.state,
+        country: location.country,
+        latitude: location.latitude,
+        longitude: location.longitude
+      };
+      setLocationData(mappedLocation);
+      const addressParts = [mappedLocation.street, mappedLocation.city, mappedLocation.state, mappedLocation.country].filter(Boolean);
       setDisplayAddress(addressParts.length > 0 ? addressParts.join(', ') : location.formattedAddress);
       toast.success('Location fetched successfully!');
     } catch (error: any) {
@@ -104,7 +113,7 @@ export const CreateShopPage = () => {
       const emailForPayment = user?.email || '';
       const nameForPayment = profile?.name || 'User';
 
-      await initiateRazorpayPayment(
+      await initiateCashfreePayment(
         {
           amount: planDetails.price,
           description: `Shop Owner Plan - ${planDetails.name}`,
@@ -143,8 +152,17 @@ export const CreateShopPage = () => {
     setLocationLoading(true);
     try {
       const location = await fetchUserLocation();
-      setLocationData(location);
-      const addressParts = [location.street, location.city, location.state, location.country].filter(Boolean);
+      const mappedLocation: LocationData = {
+        address: location.address,
+        street: location.village,
+        city: location.district,
+        state: location.state,
+        country: location.country,
+        latitude: location.latitude,
+        longitude: location.longitude
+      };
+      setLocationData(mappedLocation);
+      const addressParts = [mappedLocation.street, mappedLocation.city, mappedLocation.state, mappedLocation.country].filter(Boolean);
       setDisplayAddress(addressParts.length > 0 ? addressParts.join(', ') : location.formattedAddress);
       setShowManualLocation(false); // Hide manual fields if we got device location
       toast.success('Location detected!');
@@ -169,9 +187,8 @@ export const CreateShopPage = () => {
         street: village,
         state: state,
         country: country,
-        latitude: null,
-        longitude: null,
-        formattedAddress: address || `${village}, ${state}`,
+        latitude: undefined,
+        longitude: undefined,
         city: district
       } : undefined);
 
@@ -236,8 +253,17 @@ export const CreateShopPage = () => {
               {plans.map((plan) => {
                 const details = PLAN_DETAILS[plan];
                 const isProcessing = paymentProcessing && selectedPlan === plan;
+                const isLocked = (details as any).locked;
                 return (
-                  <div key={plan} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+                  <div key={plan} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col relative">
+                    {isLocked && (
+                      <div className="absolute inset-0 bg-white/60 backdrop-blur-[1px] z-10 flex flex-col items-center justify-center">
+                        <div className="bg-slate-900 text-white px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 shadow-lg">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                          Currently Unavailable
+                        </div>
+                      </div>
+                    )}
                     <div className="p-6 flex-1">
                       <div className="flex justify-between items-start mb-4">
                         <div className="p-2 rounded-xl bg-slate-50" style={{ color: details.color }}>
@@ -259,11 +285,11 @@ export const CreateShopPage = () => {
                     <div className="p-4 bg-slate-50 border-t">
                       <Button 
                         className="w-full h-12 text-lg font-bold rounded-xl"
-                        style={{ backgroundColor: details.color }}
+                        style={{ backgroundColor: isLocked ? '#94a3b8' : details.color }}
                         onClick={() => handlePlanSelected(plan)}
-                        disabled={paymentProcessing}
+                        disabled={paymentProcessing || isLocked}
                       >
-                        {isProcessing ? 'Processing...' : 'Select Plan'}
+                        {isLocked ? 'Locked' : isProcessing ? 'Processing...' : 'Select Plan'}
                       </Button>
                     </div>
                   </div>

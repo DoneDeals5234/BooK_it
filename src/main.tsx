@@ -9,7 +9,7 @@ import { initializeBackButton } from '@/lib/back-button-init'
 
 // Initialize back button handler as early as possible
 console.log('🚀 Initializing app...');
-initializeBackButton();
+// initializeBackButton();
 
 // Register Service Worker for PWA/Caching
 if ('serviceWorker' in navigator) {

@@ -31,6 +31,9 @@ import { BookingModalNew } from '@/components/BookingModalNew';
 import { CategoryShopsPage } from '@/components/CategoryShopsPage';
 import { ProfileCompletionPopup } from '@/components/ProfileCompletionPopup';
 import { ProductDetailsPage } from '@/components/ProductDetailsPage';
+import ContactUsPage from '@/components/ContactUsPage';
+import TermsConditionsPage from '@/components/TermsConditionsPage';
+import RefundPolicyPage from '@/components/RefundPolicyPage';
 import type { Shop, Service } from '@/lib/shops-storage';
 import type { Category } from '@/types/index';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -153,6 +156,25 @@ function AppContentInner() {
             navigate(`/shop/${notifData.shop_id}`);
           } else {
             navigate('/');
+          }
+          break;
+
+        // Chat Notifications
+        case 'temporary_chat':
+          if (notifData?.shopId || notifData?.shop_id) {
+            navigate(`/shop/${notifData.shopId || notifData.shop_id}`);
+          }
+          break;
+
+        case 'world_chat':
+          navigate('/chat');
+          break;
+
+        case 'profile_chat':
+          if (notifData?.profileUserId) {
+            navigate(`/profile/${notifData.profileUserId}`);
+          } else {
+            navigate('/profile?tab=inbox');
           }
           break;
 
@@ -451,13 +473,64 @@ function AppContentInner() {
           <Route path="/bazar" element={<HomePage onShowLogin={() => setShowLoginPopup(true)} initialTab="bazar" />} />
           <Route path="/checkout/:productId" element={<CheckoutPage />} />
           <Route path="/upload-video" element={<UploadVideoPage />} />
+          <Route path="/contact-us" element={<ContactUsPage />} />
+          <Route path="/terms-conditions" element={<TermsConditionsPage />} />
+          <Route path="/refund-policy" element={<RefundPolicyPage />} />
         </Routes>
       </Suspense>
     </div>
   );
 }
 
+function isLocalOrPrivateIP(hostname: string): boolean {
+  // Localhost
+  if (hostname === 'localhost' || hostname === '127.0.0.1') return true;
+  // Private IPv4 ranges: 10.x.x.x, 172.16-31.x.x, 192.168.x.x
+  if (hostname.startsWith('10.')) return true;
+  if (hostname.startsWith('192.168.')) return true;
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(hostname)) return true;
+  return false;
+}
+
+function getSubdomain(): string | null {
+  const hostname = window.location.hostname;
+
+  // Local development / LAN access (e.g. from phone on WiFi) → no subdomain
+  if (isLocalOrPrivateIP(hostname)) {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('subdomain');
+  }
+
+  // Production check
+  const baseDomain = 'donedeals.shop';
+  if (hostname.endsWith(baseDomain)) {
+    const subdomain = hostname.replace(`.${baseDomain}`, '');
+    if (subdomain !== baseDomain && subdomain !== 'www' && subdomain !== 'bookit' && subdomain !== 'database' && subdomain !== 'supabase') {
+      // Remove trailing dot if present
+      const cleanSub = subdomain.endsWith('.') ? subdomain.slice(0, -1) : subdomain;
+      if (cleanSub) return cleanSub;
+    }
+  }
+
+  // Custom Domain fallback (only for real external hostnames)
+  if (hostname !== 'donedeals.shop' && !hostname.endsWith('localhost') && !isLocalOrPrivateIP(hostname)) {
+    return `custom:${hostname}`;
+  }
+
+  return null;
+}
+
 function App() {
+  const subdomain = getSubdomain();
+
+  if (subdomain) {
+    return (
+      <ErrorBoundary>
+        <PublishedWebsite subdomainProp={subdomain} />
+      </ErrorBoundary>
+    );
+  }
+
   return (
     <ErrorBoundary>
       <BrowserRouter>

@@ -159,7 +159,7 @@ export const HamburgerMenu = ({ onStaffAccess, onShowLogin }: HamburgerMenuProps
                 <SheetHeader className="mb-2">
                   <SheetTitle className="text-lg sm:text-2xl">Menu</SheetTitle>
                 </SheetHeader>
-                <div className="flex flex-col gap-2 sm:gap-4 mt-6 sm:mt-8 space-y-2 sm:space-y-3 max-h-[calc(100vh-200px)] overflow-y-auto">
+                <div className="flex flex-col gap-2 sm:gap-4 mt-6 sm:mt-8 space-y-2 sm:space-y-3 max-h-[calc(100vh-200px)] overflow-y-auto overscroll-contain">
             {currentUser && (
               <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-4 rounded-xl bg-gradient-to-br from-orange-50 to-pink-50 dark:from-orange-950/30 dark:to-pink-950/30 border border-orange-200 dark:border-orange-900/50 shadow-md">
                 <div className="flex-shrink-0 h-10 sm:h-12 w-10 sm:w-12 rounded-full bg-gradient-to-br from-orange-400 to-pink-400 flex items-center justify-center">
@@ -490,6 +490,43 @@ export const HamburgerMenu = ({ onStaffAccess, onShowLogin }: HamburgerMenuProps
                 </Button>
               </div>
             )}
+
+            {/* Policies Section */}
+            <div className="border-t pt-2 sm:pt-4 space-y-2">
+              <p className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wide px-2 mb-2">Policies</p>
+              <div className="grid grid-cols-2 gap-1 sm:gap-2">
+                <Button
+                  variant="outline"
+                  className="justify-center sm:justify-start h-8 sm:h-10 text-[10px] sm:text-xs font-semibold rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border-slate-200 dark:border-slate-700 px-1 sm:px-2"
+                  onClick={() => {
+                    setOpen(false);
+                    navigate('/contact-us');
+                  }}
+                >
+                  Contact Us
+                </Button>
+                <Button
+                  variant="outline"
+                  className="justify-center sm:justify-start h-8 sm:h-10 text-[10px] sm:text-xs font-semibold rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border-slate-200 dark:border-slate-700 px-1 sm:px-2"
+                  onClick={() => {
+                    setOpen(false);
+                    navigate('/terms-conditions');
+                  }}
+                >
+                  Terms
+                </Button>
+                <Button
+                  variant="outline"
+                  className="justify-center sm:justify-start h-8 sm:h-10 text-[10px] sm:text-xs font-semibold rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border-slate-200 dark:border-slate-700 px-1 sm:px-2 col-span-2"
+                  onClick={() => {
+                    setOpen(false);
+                    navigate('/refund-policy');
+                  }}
+                >
+                  Refund Policy
+                </Button>
+              </div>
+            </div>
 
             <Button
               variant="ghost"

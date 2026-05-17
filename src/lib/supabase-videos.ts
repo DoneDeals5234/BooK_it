@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import type { Video } from '@/lib/videos-storage';
+import { sendNativeNotification } from './native-notifications';
 
 // Get all videos from Supabase, ordered by newest first
 export const getAllVideosFromSupabase = async (): Promise<Video[]> => {
@@ -177,6 +178,34 @@ export const likeVideoInSupabase = async (videoId: string, userId: string): Prom
   if (error) {
     console.error('Error liking video:', error);
     return false;
+  }
+
+  // Notify video owner about the like
+  try {
+      if (video.uploaderId && video.uploaderId !== userId) {
+        // Try to fetch liker's name and image
+        const { data: profile } = await supabase
+          .from('user_profiles')
+          .select('profile_name, image_url')
+          .eq('user_id', userId)
+          .single();
+        
+        const likerName = profile?.profile_name || 'Someone';
+        const likerImage = profile?.image_url || null;
+
+        sendNativeNotification([video.uploaderId], {
+          title: '❤️ New Like on Your Video!',
+          body: `${likerName} liked your video "${video.caption?.slice(0, 20) || 'Video'}${video.caption && video.caption.length > 20 ? '...' : ''}"`,
+          data: { 
+            type: 'video_like', 
+            video_id: videoId, 
+            route: '/videos',
+            imageUrl: likerImage
+          }
+        }).catch(console.error);
+      }
+  } catch (notifyErr) {
+    console.warn('Failed to notify video owner about like:', notifyErr);
   }
 
   return true;

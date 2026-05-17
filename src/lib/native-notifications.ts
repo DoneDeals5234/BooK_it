@@ -4,6 +4,7 @@ interface NotificationPayload {
   title: string;
   body: string;
   data?: Record<string, any>;
+  channelId?: string;
 }
 
 /**
@@ -21,7 +22,8 @@ export async function sendNativeNotification(
         userIds,
         title: payload.title,
         body: payload.body,
-        data: payload.data
+        data: payload.data,
+        channelId: payload.channelId
       }
     });
 

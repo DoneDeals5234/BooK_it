@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Plus, Save, Globe, Eye, Trash2, Move, Type, Image as ImageIcon, Minus, Square, Upload, BarChart2, Smartphone, Monitor, Settings, Crown, Star, List, Copy, Share2, Download } from 'lucide-react';
+import { X, Plus, Save, Globe, Eye, Trash2, Move, Type, Image as ImageIcon, Minus, Square, Upload, BarChart2, Smartphone, Monitor, Settings, Crown, Star, List, Copy, Share2, Download, Package, Layout } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -117,10 +117,49 @@ const ADVANCED_COMPONENTS = [
       styles: { padding: 20 }
     }
   },
+  {
+    id: 'products',
+    name: 'Products',
+    icon: <Package className="w-4 h-4 text-purple-500" />,
+    default: {
+      type: 'products' as const,
+      content: 'featured_products',
+      styles: { padding: 20, backgroundColor: '#ffffff' }
+    }
+  },
+  {
+    id: 'navbar',
+    name: 'Navigation',
+    icon: <Layout className="w-4 h-4 text-purple-500" />,
+    default: {
+      type: 'navbar' as const,
+      content: 'Navigation Bar',
+      styles: { backgroundColor: '#ffffff', color: '#000000', padding: 15 }
+    }
+  }
 ];
 
+interface WebsitePage {
+  id: string;
+  name: string;
+  slug: string;
+  components: WebsiteComponent[];
+}
+
 export function WebsiteBuilder({ isOpen, onClose, shopId, shopName }: WebsiteBuilderProps) {
-  const [components, setComponents] = useState<WebsiteComponent[]>([]);
+  const [pages, setPages] = useState<WebsitePage[]>([{ id: 'home', name: 'Home', slug: '/', components: [] }]);
+  const [activePageId, setActivePageId] = useState<string>('home');
+  
+  const activePage = pages.find(p => p.id === activePageId) || pages[0];
+  const components = activePage.components;
+  
+  const setComponents = (newComponents: WebsiteComponent[] | ((prev: WebsiteComponent[]) => WebsiteComponent[])) => {
+    setPages(prevPages => {
+      const active = prevPages.find(p => p.id === activePageId) || prevPages[0];
+      const resolved = typeof newComponents === 'function' ? newComponents(active.components) : newComponents;
+      return prevPages.map(p => p.id === active.id ? { ...p, components: resolved } : p);
+    });
+  };
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
@@ -294,7 +333,11 @@ export function WebsiteBuilder({ isOpen, onClose, shopId, shopName }: WebsiteBui
       const data = await getWebsiteByShopId(shopId);
       if (data) {
         if (data.layout_json) {
-          setComponents(data.layout_json.components || []);
+          if (data.layout_json.pages) {
+            setPages(data.layout_json.pages);
+          } else if (data.layout_json.components) {
+            setPages([{ id: 'home', name: 'Home', slug: '/', components: data.layout_json.components }]);
+          }
         }
         setCustomDomain(data.custom_domain || '');
         setVercelSubdomain(data.custom_subdomain || '');
@@ -386,7 +429,9 @@ export function WebsiteBuilder({ isOpen, onClose, shopId, shopName }: WebsiteBui
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await saveWebsiteDraft(shopId, shopName, { components });
+      // Save both new `pages` format AND legacy `components` (home page) for backward compat
+      const homeComponents = pages.find(p => p.id === 'home')?.components || components;
+      await saveWebsiteDraft(shopId, shopName, { pages, defaultPage: 'home', components: homeComponents });
       toast.success('Draft saved successfully!');
     } catch (error) {
       console.error('Save error:', error);
@@ -415,26 +460,27 @@ export function WebsiteBuilder({ isOpen, onClose, shopId, shopName }: WebsiteBui
 
     setIsPublishing(true);
     try {
-      const data = await publishWebsite(shopId, shopName, { components }, customDomain);
+      // Save both new `pages` format AND legacy `components` for backward compat with old builds
+      const homeComponents = pages.find(p => p.id === 'home')?.components || components;
+      const data = await publishWebsite(shopId, shopName, { pages, defaultPage: 'home', components: homeComponents }, customDomain);
       const slug = data.shop_name;
       const relativePath = `/shop/${slug}`;
 
-      // Generate full URL (prefer Vercel URL if available)
-      const fullUrl = vercelUrl || `${window.location.origin}/shop/${slug}`;
+      // Generate full URL: prefer claimed subdomain, custom domain, or fallback to relative path
+      const subdomainToUse = vercelSubdomain || data.custom_subdomain;
+      const fullUrl = subdomainToUse
+        ? `https://${subdomainToUse}.donedeals.shop`
+        : (customDomain ? `https://${customDomain}` : `${window.location.origin}/shop/${slug}`);
+
       setPreviewUrl(relativePath);
       setFullWebsiteUrl(fullUrl);
-
-      // If already linked to Vercel, auto-redeploy content
-      if (vercelDeploymentId) {
-        handleVercelDeploy(true); // silent deploy
-      }
 
       // Generate QR code
       const qrUrl = generateQRCode(fullUrl);
       setQrCodeUrl(qrUrl);
 
       // Show success notification with URL
-      toast.success(`Website published! URL: ${slug}`, { duration: 4 });
+      toast.success(`Website published successfully!`, { duration: 4 });
 
       // Open share modal automatically
       setTimeout(() => setShowShareModal(true), 500);
@@ -458,45 +504,58 @@ export function WebsiteBuilder({ isOpen, onClose, shopId, shopName }: WebsiteBui
   };
 
   const handleVercelDeploy = async (isSilent = false) => {
-    if (!vercelSubdomain && !isSilent) {
-      toast.error('Please enter a subdomain in Settings!');
-      setActiveTab('settings');
+    if (!vercelSubdomain) {
+      toast.error('Please enter a subdomain!');
       return;
     }
 
     if (!isSilent) setIsDeploying(true);
-    const toastId = !isSilent ? toast.loading('Connecting to Vercel...') : null;
+    const toastId = !isSilent ? toast.loading('Claiming subdomain under donedeals.shop...') : null;
 
     try {
-      if (!isSilent) toast.loading('Uploading professional files to Vercel...', { id: toastId! });
+      // 1. Check if the subdomain is already taken by another shop
+      const { data: existing, error: checkError } = await supabase
+        .from('shop_websites')
+        .select('shop_id, shop_name')
+        .eq('custom_subdomain', vercelSubdomain)
+        .neq('shop_id', shopId)
+        .maybeSingle();
 
-      const { data: deployData, error: deployError } = await supabase.functions.invoke('deploy-to-vercel', {
-        body: { action: 'deploy', subdomain: vercelSubdomain, shopId }
-      });
+      if (checkError) throw checkError;
 
-      if (deployError || (deployData && deployData.error)) {
-        throw new Error(deployError?.message || deployData?.error || 'Failed to deploy to Vercel');
+      if (existing) {
+        if (!isSilent) toast.error('This subdomain is already taken by another shop!', { id: toastId! });
+        setIsDeploying(false);
+        return;
       }
 
-      const deploymentId = deployData.deployment_id;
-      const finalUrl = deployData.url;
-      setVercelDeploymentId(deploymentId);
-      setVercelUrl(finalUrl);
+      // 2. Update subdomain and vercel_url in the database
+      const finalUrl = `https://${vercelSubdomain}.donedeals.shop`;
+      const { error: updateError } = await supabase
+        .from('shop_websites')
+        .update({
+          custom_subdomain: vercelSubdomain,
+          vercel_url: finalUrl,
+          is_published: true, // Auto publish on claim!
+          updated_at: new Date().toISOString(),
+        })
+        .eq('shop_id', shopId);
 
-      // Update database
-      await updateVercelDetails(shopId, {
-        deployment_id: deploymentId,
-        url: finalUrl,
-        subdomain: vercelSubdomain
-      });
+      if (updateError) throw updateError;
+
+      setVercelUrl(finalUrl);
+      setFullWebsiteUrl(finalUrl);
+      
+      // Generate QR code
+      const qrUrl = generateQRCode(finalUrl);
+      setQrCodeUrl(qrUrl);
 
       if (!isSilent) {
-        toast.success('Professional website is LIVE on Vercel!', { id: toastId! });
-        setFullWebsiteUrl(finalUrl);
+        toast.success('Congratulations! Your website is instantly LIVE under donedeals.shop!', { id: toastId! });
       }
     } catch (error: any) {
-      console.error('Vercel error:', error);
-      if (!isSilent) toast.error(error.message || 'Failed to deploy to Vercel', { id: toastId! });
+      console.error('Subdomain claim error:', error);
+      if (!isSilent) toast.error(error.message || 'Failed to claim subdomain', { id: toastId! });
     } finally {
       if (!isSilent) setIsDeploying(false);
     }
@@ -537,7 +596,7 @@ export function WebsiteBuilder({ isOpen, onClose, shopId, shopName }: WebsiteBui
             </Button>
             <Button size="sm" onClick={handlePublish} disabled={isPublishing || isDeploying}>
               <Globe className="w-4 h-4 mr-2" />
-              {isPublishing || isDeploying ? 'Publishing...' : vercelDeploymentId ? 'Update Live Site' : 'Publish Live'}
+              {isPublishing || isDeploying ? 'Publishing...' : vercelUrl ? 'Update Live Site' : 'Publish Live'}
             </Button>
             <Button variant="ghost" size="icon" onClick={onClose}>
               <X className="w-4 h-4" />
@@ -549,8 +608,9 @@ export function WebsiteBuilder({ isOpen, onClose, shopId, shopName }: WebsiteBui
           {/* Sidebar - Add Components */}
           <div className="w-64 border-r bg-gray-50 p-4 overflow-y-auto">
             <Tabs defaultValue="add">
-              <TabsList className="grid w-full grid-cols-4 mb-4">
+              <TabsList className="grid w-full grid-cols-5 mb-4">
                 <TabsTrigger value="add">Add</TabsTrigger>
+                <TabsTrigger value="pages">Pages</TabsTrigger>
                 <TabsTrigger value="templates">Tmpl</TabsTrigger>
                 <TabsTrigger value="stats">Stats</TabsTrigger>
                 <TabsTrigger value="settings"><Settings className="w-3 h-3" /></TabsTrigger>
@@ -606,6 +666,69 @@ export function WebsiteBuilder({ isOpen, onClose, shopId, shopName }: WebsiteBui
                     Upgrade for Advanced Features
                   </Button>
                 )}
+              </TabsContent>
+
+              {/* ===== PAGES TAB ===== */}
+              <TabsContent value="pages">
+                <h3 className="font-semibold mb-3 flex items-center gap-2">
+                  <Layout className="w-4 h-4" /> Pages
+                </h3>
+                <div className="space-y-2 mb-4">
+                  {pages.map((page) => (
+                    <div
+                      key={page.id}
+                      className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all ${
+                        activePageId === page.id
+                          ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                          : 'border-gray-200 bg-white hover:border-gray-300'
+                      }`}
+                      onClick={() => { setActivePageId(page.id); setSelectedId(null); }}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Globe className="w-3 h-3 shrink-0" />
+                        <span className="text-xs font-semibold truncate">{page.name}</span>
+                        {page.id === 'home' && (
+                          <span className="text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-bold">HOME</span>
+                        )}
+                      </div>
+                      {page.id !== 'home' && (
+                        <button
+                          className="text-red-400 hover:text-red-600 transition-colors shrink-0"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm(`Delete page "${page.name}"?`)) {
+                              const remaining = pages.filter(p => p.id !== page.id);
+                              setPages(remaining);
+                              setActivePageId('home');
+                            }
+                          }}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <Button
+                  size="sm"
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white"
+                  onClick={() => {
+                    const name = prompt('New page name (e.g. About, Products, Contact):');
+                    if (!name?.trim()) return;
+                    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+                    const id = `page_${Date.now()}`;
+                    setPages(prev => [...prev, { id, name: name.trim(), slug, components: [] }]);
+                    setActivePageId(id);
+                    setSelectedId(null);
+                  }}
+                >
+                  <Plus className="w-3 h-3 mr-1" /> Add New Page
+                </Button>
+
+                <div className="mt-3 p-2 bg-amber-50 border border-amber-200 rounded-lg">
+                  <p className="text-[10px] text-amber-700 font-medium">💡 Tip: Connect buttons to pages using the <strong>Link To</strong> property in the button panel.</p>
+                </div>
               </TabsContent>
 
               <TabsContent value="templates">
@@ -677,7 +800,7 @@ export function WebsiteBuilder({ isOpen, onClose, shopId, shopName }: WebsiteBui
 
                   <div className="space-y-2 pt-4 border-t">
                     <Label className="flex items-center gap-2 text-indigo-700 font-bold">
-                      <Globe className="w-3 h-3" /> Professional Subdomain
+                      <Globe className="w-3 h-3" /> Shop Subdomain
                     </Label>
                     <div className="flex gap-1">
                       <Input
@@ -685,22 +808,22 @@ export function WebsiteBuilder({ isOpen, onClose, shopId, shopName }: WebsiteBui
                         value={vercelSubdomain}
                         onChange={(e) => setVercelSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
                         className="flex-1"
-                        disabled={!!vercelDeploymentId}
+                        disabled={!!vercelUrl}
                       />
-                      <span className="flex items-center text-xs text-gray-400">.vercel.app</span>
+                      <span className="flex items-center text-xs text-gray-400">.donedeals.shop</span>
                     </div>
-                    {vercelDeploymentId ? (
-                      <p className="text-[10px] text-green-600 font-medium">✓ Connected to Vercel</p>
+                    {vercelUrl ? (
+                      <p className="text-[10px] text-green-600 font-medium">✓ Subdomain Active & Live!</p>
                     ) : (
-                      <p className="text-[10px] text-gray-500">Choose your unique shop name for the URL.</p>
+                      <p className="text-[10px] text-gray-500">Choose your unique subdomain name under donedeals.shop.</p>
                     )}
 
                     <Button
-                      className="w-full mt-2 bg-indigo-600 hover:bg-indigo-700 text-white"
+                      className="w-full mt-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold"
                       onClick={() => handleVercelDeploy()}
                       disabled={isDeploying}
                     >
-                      {isDeploying ? 'Deploying...' : vercelDeploymentId ? 'Sync with Vercel' : 'Claim & Launch Site'}
+                      {isDeploying ? 'Claiming...' : vercelUrl ? 'Update Subdomain' : 'Claim & Launch Site'}
                     </Button>
 
                     {vercelUrl && (
@@ -798,16 +921,50 @@ export function WebsiteBuilder({ isOpen, onClose, shopId, shopName }: WebsiteBui
                 )}
 
                 {selectedComponent.type === 'button' && (
-                  <div className="space-y-2">
-                    <Label>Button Color</Label>
-                    <Input 
-                      type="color"
-                      value={selectedComponent.styles.backgroundColor || '#ef4444'}
-                      onChange={(e) => updateComponent(selectedComponent.id, { 
-                        styles: { ...selectedComponent.styles, backgroundColor: e.target.value } 
-                      })}
-                    />
-                  </div>
+                  <>
+                    <div className="space-y-2">
+                      <Label>Button Color</Label>
+                      <Input 
+                        type="color"
+                        value={selectedComponent.styles.backgroundColor || '#ef4444'}
+                        onChange={(e) => updateComponent(selectedComponent.id, { 
+                          styles: { ...selectedComponent.styles, backgroundColor: e.target.value } 
+                        })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Border Radius ({selectedComponent.styles.borderRadius || 0}px)</Label>
+                      <Slider
+                        value={[selectedComponent.styles.borderRadius || 0]}
+                        min={0} max={50} step={2}
+                        onValueChange={([val]) => updateComponent(selectedComponent.id, {
+                          styles: { ...selectedComponent.styles, borderRadius: val }
+                        })}
+                      />
+                    </div>
+                    {/* Link To Page */}
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-1">
+                        <Layout className="w-3 h-3" /> Link To Page
+                      </Label>
+                      <select
+                        className="w-full p-2 border rounded-md text-sm"
+                        value={selectedComponent.linkTo || ''}
+                        onChange={(e) => updateComponent(selectedComponent.id, { linkTo: e.target.value || undefined })}
+                      >
+                        <option value="">— None (opens booking) —</option>
+                        {pages.map(p => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                        <option value="__whatsapp">📲 WhatsApp Chat</option>
+                        <option value="__call">📞 Call Shop</option>
+                        <option value="__booking">📅 Book Appointment</option>
+                      </select>
+                      {selectedComponent.linkTo && (
+                        <p className="text-[10px] text-indigo-600">✓ Button linked to: <strong>{pages.find(p=>p.id===selectedComponent.linkTo)?.name || selectedComponent.linkTo}</strong></p>
+                      )}
+                    </div>
+                  </>
                 )}
 
                 <div className="space-y-2">
@@ -829,10 +986,55 @@ export function WebsiteBuilder({ isOpen, onClose, shopId, shopName }: WebsiteBui
                   </div>
                 </div>
 
+                {/* Background Color for all types */}
+                <div className="space-y-2">
+                  <Label>Background</Label>
+                  <Input
+                    type="color"
+                    value={selectedComponent.styles.backgroundColor || '#ffffff'}
+                    onChange={(e) => updateComponent(selectedComponent.id, {
+                      styles: { ...selectedComponent.styles, backgroundColor: e.target.value }
+                    })}
+                  />
+                </div>
+
+                <div className="flex gap-2 mt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => {
+                      const idx = components.findIndex(c => c.id === selectedComponent.id);
+                      if (idx > 0) {
+                        const arr = [...components];
+                        [arr[idx-1], arr[idx]] = [arr[idx], arr[idx-1]];
+                        setComponents(arr);
+                      }
+                    }}
+                  >
+                    ↑ Up
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => {
+                      const idx = components.findIndex(c => c.id === selectedComponent.id);
+                      if (idx < components.length - 1) {
+                        const arr = [...components];
+                        [arr[idx], arr[idx+1]] = [arr[idx+1], arr[idx]];
+                        setComponents(arr);
+                      }
+                    }}
+                  >
+                    ↓ Down
+                  </Button>
+                </div>
+
                 <Button 
                   variant="destructive" 
                   size="sm" 
-                  className="w-full mt-4"
+                  className="w-full mt-2"
                   onClick={() => removeComponent(selectedComponent.id)}
                 >
                   <Trash2 className="w-4 h-4 mr-2" /> Remove Component
@@ -842,7 +1044,38 @@ export function WebsiteBuilder({ isOpen, onClose, shopId, shopName }: WebsiteBui
           </div>
 
           {/* Canvas */}
-          <div className="flex-1 bg-gray-100 p-8 overflow-y-auto">
+          <div className="flex-1 bg-gray-100 overflow-y-auto">
+            {/* Page Tabs Bar */}
+            <div className="bg-white border-b px-4 py-2 flex items-center gap-2 overflow-x-auto sticky top-0 z-10 shadow-sm">
+              {pages.map(page => (
+                <button
+                  key={page.id}
+                  onClick={() => { setActivePageId(page.id); setSelectedId(null); }}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all ${
+                    activePageId === page.id
+                      ? 'bg-slate-900 text-white shadow-sm'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {page.id === 'home' ? '🏠' : '📄'} {page.name}
+                </button>
+              ))}
+              <button
+                className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all"
+                onClick={() => {
+                  const name = prompt('New page name:');
+                  if (!name?.trim()) return;
+                  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+                  const id = `page_${Date.now()}`;
+                  setPages(prev => [...prev, { id, name: name.trim(), slug, components: [] }]);
+                  setActivePageId(id);
+                }}
+              >
+                <Plus className="w-3 h-3" /> Add Page
+              </button>
+            </div>
+
+            <div className="p-6">
             {previewUrl && (
               <div className="mb-4 p-4 bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg">
                 <div className="flex items-center justify-between mb-3">
@@ -973,7 +1206,7 @@ export function WebsiteBuilder({ isOpen, onClose, shopId, shopName }: WebsiteBui
                                 <span>{s.name}</span>
                                 <span className="font-bold">{s.price}</span>
                               </div>
-                            ))}
+                            )) || <p className="text-xs text-gray-400">No services added yet</p>}
                           </div>
                         )}
 
@@ -988,7 +1221,48 @@ export function WebsiteBuilder({ isOpen, onClose, shopId, shopName }: WebsiteBui
                                 </div>
                                 <p className="italic">"{r.reviewText}"</p>
                               </div>
-                            ))}
+                            )) || <p className="text-xs text-gray-400">No reviews yet</p>}
+                          </div>
+                        )}
+
+                        {comp.type === 'products' && (
+                          <div style={{ backgroundColor: comp.styles.backgroundColor, padding: `${comp.styles.padding}px` }}>
+                            <div className="flex items-center justify-between mb-3">
+                              <h4 className="font-bold text-sm flex items-center gap-1">
+                                <Package className="w-4 h-4 text-orange-500" /> Featured Products
+                              </h4>
+                              <span className="text-[10px] bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full font-bold">SHOP</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              {[1,2,3,4].map(i => (
+                                <div key={i} className="bg-white rounded-lg border p-2 shadow-sm">
+                                  <div className="w-full h-16 bg-gray-100 rounded mb-2 flex items-center justify-center">
+                                    <Package className="w-5 h-5 text-gray-300" />
+                                  </div>
+                                  <p className="text-[10px] font-bold text-gray-800">Product {i}</p>
+                                  <p className="text-[10px] text-orange-600 font-black">₹0.00</p>
+                                </div>
+                              ))}
+                            </div>
+                            <p className="text-[9px] text-center text-gray-400 mt-2">Live products from your store will appear here</p>
+                          </div>
+                        )}
+
+                        {comp.type === 'navbar' && (
+                          <div
+                            className="flex items-center justify-between px-4 shadow-sm"
+                            style={{
+                              backgroundColor: comp.styles.backgroundColor,
+                              color: comp.styles.color,
+                              padding: `${comp.styles.padding || 15}px 16px`,
+                            }}
+                          >
+                            <span className="font-black text-sm" style={{ color: comp.styles.color }}>{shopName}</span>
+                            <div className="flex gap-3">
+                              {pages.map(p => (
+                                <span key={p.id} className="text-xs font-semibold opacity-80" style={{ color: comp.styles.color }}>{p.name}</span>
+                              ))}
+                            </div>
                           </div>
                         )}
                       </div>
@@ -996,6 +1270,7 @@ export function WebsiteBuilder({ isOpen, onClose, shopId, shopName }: WebsiteBui
                   ))}
                 </div>
               )}
+            </div>
             </div>
           </div>
         </div>

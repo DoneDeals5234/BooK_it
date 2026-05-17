@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,6 +26,7 @@ interface DocumentPrintingSectionProps {
 
 export const DocumentPrintingSection = ({ shopId, shopName, shopLat, shopLng, shopMapLink }: DocumentPrintingSectionProps) => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [settings, setSettings] = useState<PrintingSettings | null>(null);
@@ -310,6 +312,7 @@ export const DocumentPrintingSection = ({ shopId, shopName, shopLat, shopLng, sh
         toast.success('Printing order placed successfully!');
         setFiles([]);
         setNote('');
+        navigate('/profile?tab=orders&expanded=true');
       } else {
         toast.error('Order placed but document details failed to save. Please contact the shop.');
       }

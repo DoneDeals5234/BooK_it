@@ -1,4 +1,5 @@
 import { getNativeShopOwnersByShopId, getAllNativeShopOwners } from '@/lib/supabase-native-shop-owners';
+import { getShopOwnersByShopId, getAllShopOwners } from '@/lib/supabase-shop-owners';
 import { sendNativeNotification } from '@/lib/native-notifications';
 
 interface ChatNotificationContext {
@@ -31,14 +32,18 @@ export async function sendTemporaryChatNotification(
   try {
     console.log('🔔 Sending temporary chat notification...');
     
-    const shopOwners = await getNativeShopOwnersByShopId(context.shopId);
+    const nativeShopOwners = await getNativeShopOwnersByShopId(context.shopId);
+    const webShopOwners = await getShopOwnersByShopId(context.shopId);
 
-    if (!shopOwners || shopOwners.length === 0) {
+    const allShopOwners = [...(nativeShopOwners || []), ...(webShopOwners || [])];
+
+    if (allShopOwners.length === 0) {
       console.warn('⚠️ No shop owner found for this shop');
       return { success: false, method: 'none' };
     }
 
-    const userIds = shopOwners.map(o => o.userId);
+    // Get unique user IDs
+    const userIds = Array.from(new Set(allShopOwners.map(o => o.userId)));
 
     const notificationSuccess = await sendNativeNotification(userIds, {
       title: `💬 New message from ${context.senderName}`,
@@ -48,6 +53,7 @@ export async function sendTemporaryChatNotification(
         shopId: context.shopId,
         senderName: context.senderName,
       },
+      channelId: 'chat_popup_channel',
     });
 
     if (notificationSuccess) {
@@ -70,14 +76,17 @@ export async function sendWorldChatNotification(
   try {
     console.log('🌍 Sending world chat notification to all shop owners...');
     
-    const allShopOwners = await getAllNativeShopOwners();
+    const allNativeShopOwners = await getAllNativeShopOwners();
+    const allWebShopOwners = await getAllShopOwners();
 
-    if (!allShopOwners || allShopOwners.length === 0) {
+    const allShopOwnersCombined = [...(allNativeShopOwners || []), ...(allWebShopOwners || [])];
+
+    if (allShopOwnersCombined.length === 0) {
       console.warn('⚠️ No shop owners found in the system');
       return { success: false, method: 'none' };
     }
 
-    const userIds = Array.from(new Set(allShopOwners.map(owner => owner.userId).filter(Boolean)));
+    const userIds = Array.from(new Set(allShopOwnersCombined.map(owner => owner.userId).filter(Boolean)));
 
     if (userIds.length === 0) {
       console.warn('⚠️ No valid user IDs found for shop owners');

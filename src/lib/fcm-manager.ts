@@ -113,8 +113,39 @@ export async function initializeFcm(userId: string | null): Promise<string | nul
 
         // Listen for FCM messages in foreground
         await FirebaseMessaging.addListener('notificationReceived', async (event) => {
-          console.log('🔔 FCM foreground notification received (native):', event);
+          console.log('🔔 FCM foreground notification received (native):', JSON.stringify(event));
           
+          // Robust data extraction: some versions put data in event.notification.data, others in event.data
+          const data = event.notification.data || (event as any).data || {};
+          const isRingRequested = data.ring === 'true' || (event as any).ring === 'true' || data.type === 'new_order';
+          
+          console.log('📱 Notification Data:', data, 'Ring requested:', isRingRequested);
+
+          // 🚨 TRICK: Trigger Native Alarm for New Orders if the ring flag is present
+          if (isRingRequested && (window as any).AlarmBridge) {
+            console.log('🚨 Ring flag detected! Triggering high-priority alarm sequence...');
+            try {
+              const orderId = data.order_id || data.orderId || `order-${Date.now()}`;
+              
+              // Method 1: standard alarm trigger
+              if ((window as any).AlarmBridge.testAlarm) {
+                (window as any).AlarmBridge.testAlarm(orderId, 1); 
+              }
+
+              // Method 2: High-priority notification with sound (more reliable for ringing)
+              if ((window as any).AlarmBridge.sendImportantNotification) {
+                (window as any).AlarmBridge.sendImportantNotification({
+                  title: event.notification.title || 'New Order Received! 🛍️',
+                  body: event.notification.body || 'Open the app to view and accept the order.',
+                  bookingId: orderId,
+                  orderId: orderId
+                });
+              }
+            } catch (e) {
+              console.error('Failed to trigger native alarm:', e);
+            }
+          }
+
           // Show a simple toast so the user knows something happened
           try {
             const { toast } = await import('react-hot-toast');

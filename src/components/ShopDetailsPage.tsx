@@ -20,7 +20,7 @@ import { OrderAmountModal } from '@/components/OrderAmountModal';
 import { ReminderAlertDialog } from '@/components/ReminderAlertDialog';
 import { useBookingReminder } from '@/hooks/useBookingReminder';
 import { getShopCustomization, customizationToCssVariables, getDefaultCustomization, type ShopCustomization } from '@/lib/shop-customization-db';
-import type { Shop } from '@/lib/shops-storage';
+import type { Shop, Service } from '@/lib/shops-storage';
 import type { Booking } from '@/lib/bookings-storage';
 import type { ShopOffer } from '@/types';
 import { useNavigate } from 'react-router-dom';
@@ -77,6 +77,7 @@ export const ShopDetailsPage = ({
   const [showCustomizer, setShowCustomizer] = useState(false);
   const [cssVars, setCssVars] = useState<Record<string, string>>({});
   const [showBookingModal, setShowBookingModal] = useState(false);
+  const [selectedServiceForBooking, setSelectedServiceForBooking] = useState<Service | null>(null);
   const { activeReminder, confirmReminder, cancelReminder } = useBookingReminder();
 
   // Handle device back button
@@ -666,23 +667,32 @@ export const ShopDetailsPage = ({
                           return (
                             <div
                               key={booking.id}
-                              className="bg-white dark:bg-slate-800 p-2 rounded-lg flex items-center gap-3 border border-slate-100 dark:border-slate-700 shadow-sm"
+                              className="bg-white dark:bg-slate-800 p-4 rounded-xl flex items-center gap-4 border border-slate-100 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow"
                             >
-                              <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center text-[10px] sm:text-xs font-bold shrink-0">
+                              <div className="h-10 w-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center text-xs font-bold shrink-0">
                                 #{booking.tokenNumber}
                               </div>
                               <div className="flex-1 min-w-0">
-                                <p className="text-[11px] sm:text-sm font-bold truncate">
+                                <p className="text-sm font-bold truncate">
                                   {booking.customerProfile?.name || booking.userName}
                                 </p>
-                                <p className="text-[9px] sm:text-[10px] text-muted-foreground">
-                                  {booking.timeSlot}
-                                </p>
+                                <div className="flex gap-2 mt-0.5">
+                                  <p className="text-[10px] text-muted-foreground font-medium">
+                                    {booking.booking_date || 'N/A'}
+                                  </p>
+                                  <p className="text-[10px] text-slate-400">|</p>
+                                  <p className="text-[10px] text-muted-foreground font-medium">
+                                    {booking.timeSlot}
+                                  </p>
+                                </div>
                               </div>
-                              <span className={`px-2 py-0.5 rounded-full text-[8px] sm:text-[9px] font-bold uppercase ${booking.status === 'in-progress' ? 'bg-red-100 text-red-600' :
-                                  booking.status === 'completed' ? 'bg-green-100 text-green-600' :
-                                    'bg-amber-100 text-amber-600'
-                                }`}>
+                              <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase ${
+                                booking.status === 'in-progress' ? 'bg-red-100 text-red-600' :
+                                booking.status === 'completed' ? 'bg-green-100 text-green-600' :
+                                booking.status === 'accepted' ? 'bg-green-100 text-green-600' :
+                                booking.status === 'rejected' ? 'bg-red-100 text-red-600' :
+                                'bg-amber-100 text-amber-600'
+                              }`}>
                                 {booking.status}
                               </span>
                             </div>
@@ -709,6 +719,7 @@ export const ShopDetailsPage = ({
                       <tr>
                         <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-red-600 dark:text-red-400">Service</th>
                         <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-red-600 dark:text-red-400">Price</th>
+                        <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-red-600 dark:text-red-400">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y">
@@ -716,6 +727,19 @@ export const ShopDetailsPage = ({
                         <tr key={service.id} className="hover:bg-red-50/30 dark:hover:bg-red-900/10 transition-colors">
                           <td className="px-4 py-4 text-sm font-medium">{service.name}</td>
                           <td className="px-4 py-4 text-right text-sm font-bold text-red-600">₹{service.price}</td>
+                          <td className="px-4 py-4 text-right">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-red-600 border-red-200 hover:bg-red-50 h-8 px-3 text-xs font-bold rounded-lg"
+                              onClick={() => {
+                                setSelectedServiceForBooking(service);
+                                setShowBookingModal(true);
+                              }}
+                            >
+                              Book
+                            </Button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -1008,9 +1032,14 @@ export const ShopDetailsPage = ({
       {showBookingModal && (
         <BookingModalNew
           shop={shop}
-          onClose={() => setShowBookingModal(false)}
+          onClose={() => {
+            setShowBookingModal(false);
+            setSelectedServiceForBooking(null);
+          }}
+          initialService={selectedServiceForBooking || undefined}
           onBookingCreated={() => {
             setShowBookingModal(false);
+            setSelectedServiceForBooking(null);
           }}
         />
       )}

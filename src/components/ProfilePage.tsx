@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowLeft, Upload, Clock, MapPin, Edit, Trash2, Check, AlertCircle, Loader2, Phone, MessageCircle, MessageSquare, Store } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { supabase } from '@/lib/supabase';
 import { ProfileChatModal } from '@/components/ProfileChatModal';
 import { ImageUploadModal } from '@/components/ImageUploadModal';
 import { getBookingHistory, deleteBooking, type BookingHistoryItem } from '@/lib/booking-history';
@@ -33,12 +34,12 @@ interface ProfilePageProps {
   targetUserId?: string;
 }
 
-type BookingTab = 'today' | 'history' | 'campaigns' | 'orders' | 'posts';
+type BookingTab = 'bookings' | 'campaigns' | 'orders' | 'posts';
 
 export const ProfilePage = ({
   onClose,
   onShopSelect,
-  initialTab = 'today',
+  initialTab = 'bookings',
   initiallyEditing = false,
   openInbox = 0,
   targetUserId,
@@ -82,6 +83,7 @@ export const ProfilePage = ({
   const [instagramUrl, setInstagramUrl] = useState('');
   const [facebookUrl, setFacebookUrl] = useState('');
   const [bookingHistory, setBookingHistory] = useState<BookingHistoryItem[]>([]);
+  const [supabaseBookings, setSupabaseBookings] = useState<any[]>([]);
   const [isEditing, setIsEditing] = useState(false);
   const [userVideos, setUserVideos] = useState<Video[]>([]);
   const [deletingVideoId, setDeletingVideoId] = useState<string | null>(null);
@@ -93,7 +95,7 @@ export const ProfilePage = ({
   const handleLongPressStart = (id: string) => {}; // Simplified
   const handleLongPressEnd = () => {}; // Simplified
 
-  const tabOrder: BookingTab[] = ['today', 'history', 'campaigns', 'orders', 'posts'];
+  const tabOrder: BookingTab[] = ['bookings', 'campaigns', 'orders', 'posts'];
 
   // Handle device back button
   useDeviceBackButton({
@@ -148,10 +150,50 @@ export const ProfilePage = ({
     const userIdToLoad = effectiveTargetUserId || user?.uid;
     if (!userIdToLoad) return;
 
-    if (activeTab === 'today' || activeTab === 'history') {
-      if (bookingHistory.length === 0) {
-        setBookingHistory(getBookingHistory(userIdToLoad));
-      }
+    if (activeTab === 'bookings') {
+      const fetchBookings = async () => {
+        const { data, error } = await supabase
+          .from('bookings')
+          .select('*')
+          .eq('user_id', userIdToLoad)
+          .order('created_at', { ascending: false });
+        
+        if (!error && data) {
+          setSupabaseBookings(data);
+        }
+      };
+      fetchBookings();
+
+      // Subscribe to real-time updates
+      const channel = supabase
+        .channel(`user-bookings-${userIdToLoad}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'bookings',
+            filter: `user_id=eq.${userIdToLoad}`,
+          },
+          (payload: any) => {
+            if (payload.eventType === 'INSERT') {
+              setSupabaseBookings((prev) => [payload.new, ...prev]);
+            } else if (payload.eventType === 'UPDATE') {
+              setSupabaseBookings((prev) => 
+                prev.map((b) => b.id === payload.new.id ? payload.new : b)
+              );
+            } else if (payload.eventType === 'DELETE') {
+              setSupabaseBookings((prev) => 
+                prev.filter((b) => b.id === payload.old.id)
+              );
+            }
+          }
+        )
+        .subscribe();
+
+      return () => {
+        channel.unsubscribe();
+      };
     } else if (activeTab === 'posts') {
       if (userVideos.length === 0) {
         getVideosByUploaderId(userIdToLoad).then(setUserVideos);
@@ -436,16 +478,10 @@ export const ProfilePage = ({
             {/* Scrollable Content */}
             <div className="flex-1 overflow-y-auto p-5 bg-slate-50">
               <div className="max-w-2xl mx-auto space-y-6 pb-20">
-                {activeTab === 'today' && (
+                {activeTab === 'bookings' && (
                   <div className="grid gap-4">
-                    {todayBookings.length === 0 ? <EmptyView icon={<Clock />} text="No activity for today" /> : 
-                    todayBookings.map(b => <BookingCard key={b.id} booking={b} isOwnProfile={isOwnProfile} />)}
-                  </div>
-                )}
-                {activeTab === 'history' && (
-                  <div className="grid gap-4">
-                    {historyBookings.length === 0 ? <EmptyView icon={<Clock />} text="History is empty" /> : 
-                    historyBookings.map(b => <BookingCard key={b.id} booking={b} isOwnProfile={isOwnProfile} />)}
+                    {supabaseBookings.length === 0 ? <EmptyView icon={<Clock />} text="No bookings found" /> : 
+                    supabaseBookings.map(b => <BookingCard key={b.id} booking={b} />)}
                   </div>
                 )}
                 {activeTab === 'campaigns' && <CampaignAlertsSection userId={userIdToLoad || ''} />}
@@ -489,17 +525,33 @@ export const ProfilePage = ({
   );
 };
 
-const BookingCard = ({ booking, isOwnProfile }: { booking: BookingHistoryItem, isOwnProfile: boolean }) => (
+const BookingCard = ({ booking }: { booking: any }) => (
   <div className="bg-white p-5 rounded-[32px] border border-slate-100 shadow-sm flex items-center gap-4">
     <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center">
       <Clock className="h-6 w-6 text-slate-300" />
     </div>
     <div className="flex-1">
-      <p className="font-black text-slate-900 text-sm italic">{booking.shopName}</p>
+      <p className="font-black text-slate-900 text-sm italic">{booking.shop_name || 'Shop'}</p>
+      <p className="text-xs text-muted-foreground">{booking.service_name}</p>
       <div className="flex gap-3 mt-1">
-        <p className="text-[10px] text-slate-500 font-bold uppercase">{booking.timeSlot}</p>
-        <p className="text-[10px] text-red-500 font-black uppercase">#{booking.tokenNumber}</p>
+        <p className="text-[10px] text-slate-500 font-bold uppercase">{booking.booking_date} | {booking.time_slot}</p>
+        <p className="text-[10px] text-red-500 font-black uppercase">#{booking.token_number}</p>
       </div>
+    </div>
+    <div className="flex flex-col items-end gap-1">
+      <span className={`text-[10px] font-black uppercase px-2 py-1 rounded-full ${
+        booking.status === 'pending' ? 'bg-amber-100 text-amber-600' :
+        booking.status === 'accepted' ? 'bg-green-100 text-green-600' :
+        booking.status === 'rejected' ? 'bg-red-100 text-red-600' :
+        'bg-gray-100 text-gray-600'
+      }`}>
+        {booking.status}
+      </span>
+      {booking.status === 'rejected' && booking.rejection_reason && (
+        <span className="text-[10px] text-red-500 font-medium max-w-[120px] truncate" title={booking.rejection_reason}>
+          Reason: {booking.rejection_reason}
+        </span>
+      )}
     </div>
   </div>
 );
