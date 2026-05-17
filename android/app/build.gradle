@@ -10,8 +10,8 @@ android {
         applicationId "com.bookbarber.app"
         minSdkVersion 23
         targetSdkVersion 35
-        versionCode 180
-        versionName "0.0.180"
+        versionCode 185
+        versionName "0.0.185"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 

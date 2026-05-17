@@ -34,6 +34,7 @@ import { ProductDetailsPage } from '@/components/ProductDetailsPage';
 import ContactUsPage from '@/components/ContactUsPage';
 import TermsConditionsPage from '@/components/TermsConditionsPage';
 import RefundPolicyPage from '@/components/RefundPolicyPage';
+import { MobileMenuPage } from '@/components/MobileMenuPage';
 import type { Shop, Service } from '@/lib/shops-storage';
 import type { Category } from '@/types/index';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -476,6 +477,7 @@ function AppContentInner() {
           <Route path="/contact-us" element={<ContactUsPage />} />
           <Route path="/terms-conditions" element={<TermsConditionsPage />} />
           <Route path="/refund-policy" element={<RefundPolicyPage />} />
+          <Route path="/menu" element={<MobileMenuPage />} />
         </Routes>
       </Suspense>
     </div>
