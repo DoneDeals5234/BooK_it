@@ -513,7 +513,7 @@ function getSubdomain(): string | null {
   }
 
   // Custom Domain fallback (only for real external hostnames)
-  if (hostname !== 'donedeals.shop' && !hostname.endsWith('localhost') && !isLocalOrPrivateIP(hostname)) {
+  if (hostname !== 'donedeals.shop' && !hostname.endsWith('.donedeals.shop') && !hostname.endsWith('localhost') && !isLocalOrPrivateIP(hostname)) {
     return `custom:${hostname}`;
   }
 
