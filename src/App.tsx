@@ -15,17 +15,37 @@ import HomePage from '@/components/HomePage';
 import { ShopDetailsPage } from '@/components/ShopDetailsPage';
 import CheckoutPage from '@/components/CheckoutPage';
 
-// Lazy load heavy components
+// Lazy load heavy components with retry logic for chunk load errors
+const lazyRetry = (componentImport: () => Promise<any>) => {
+  return lazy(async () => {
+    const pageHasAlreadyBeenForceRefreshed = JSON.parse(
+      window.sessionStorage.getItem('page-has-been-force-refreshed') || 'false'
+    );
+    try {
+      const component = await componentImport();
+      window.sessionStorage.setItem('page-has-been-force-refreshed', 'false');
+      return component;
+    } catch (error) {
+      if (!pageHasAlreadyBeenForceRefreshed) {
+        window.sessionStorage.setItem('page-has-been-force-refreshed', 'true');
+        window.location.reload();
+        return { default: () => null }; // Placeholder while reloading
+      }
+      throw error;
+    }
+  });
+};
+
 import { StaffPortal } from '@/components/StaffPortal';
 import { BarberPortal } from '@/components/BarberPortal';
-const ProfilePage = lazy(() => import('@/components/ProfilePage').then(m => ({ default: m.ProfilePage })));
-const ShortVideosPage = lazy(() => import('@/components/ShortVideosPage'));
-const CreateShopPage = lazy(() => import('@/components/CreateShopPage').then(m => ({ default: m.CreateShopPage })));
-const WorldChatPage = lazy(() => import('@/components/WorldChatPage'));
-const OffersListPage = lazy(() => import('@/components/OffersListPage').then(m => ({ default: m.OffersListPage })));
-const CartPage = lazy(() => import('@/components/CartPage'));
-const BazarTab = lazy(() => import('@/components/BazarTab'));
-const UploadVideoPage = lazy(() => import('@/components/UploadVideoPage').then(m => ({ default: m.UploadVideoPage })));
+const ProfilePage = lazyRetry(() => import('@/components/ProfilePage').then(m => ({ default: m.ProfilePage })));
+const ShortVideosPage = lazyRetry(() => import('@/components/ShortVideosPage'));
+const CreateShopPage = lazyRetry(() => import('@/components/CreateShopPage').then(m => ({ default: m.CreateShopPage })));
+const WorldChatPage = lazyRetry(() => import('@/components/WorldChatPage'));
+const OffersListPage = lazyRetry(() => import('@/components/OffersListPage').then(m => ({ default: m.OffersListPage })));
+const CartPage = lazyRetry(() => import('@/components/CartPage'));
+const BazarTab = lazyRetry(() => import('@/components/BazarTab'));
+const UploadVideoPage = lazyRetry(() => import('@/components/UploadVideoPage').then(m => ({ default: m.UploadVideoPage })));
 
 import { BookingModalNew } from '@/components/BookingModalNew';
 import { CategoryShopsPage } from '@/components/CategoryShopsPage';

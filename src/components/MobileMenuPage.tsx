@@ -92,9 +92,9 @@ export function MobileMenuPage() {
   const isHighestPlan = currentPlan?.plan_name === 'premium';
 
   return (
-    <div className="min-h-screen bg-white dark:bg-slate-900 w-full flex flex-col relative z-0">
+    <div className="min-h-screen bg-white dark:bg-slate-900 w-full flex flex-col relative z-0" style={{ transform: 'translateZ(0)', WebkitTransform: 'translateZ(0)', backfaceVisibility: 'hidden', contain: 'content' }}>
       {/* Header - Always loaded instantly */}
-      <div className="sticky top-0 flex items-center justify-between p-4 border-b border-border/40 bg-white dark:bg-slate-900 z-20">
+      <div className="flex items-center justify-between p-4 border-b border-border/40 bg-white dark:bg-slate-900 z-20">
         <h1 className="text-xl sm:text-2xl font-bold">Menu</h1>
         <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="rounded-full">
           <X className="h-6 w-6" />

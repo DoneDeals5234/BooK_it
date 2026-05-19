@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { ArrowLeft, Send, Clock, MessageSquare, Camera, X } from 'lucide-react';
+import { ArrowLeft, Send, Clock, MessageSquare, Camera, X, Zap } from 'lucide-react';
 import { CampaignTargetSelector } from './CampaignTargetSelector';
 import { ScheduleSelector } from './ScheduleSelector';
 import { supabase } from '@/lib/supabase';
