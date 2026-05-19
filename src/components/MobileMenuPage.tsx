@@ -1,9 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useAppUpdate } from '@/contexts/AppUpdateContext';
-import { Download, User, Store, Plus, TrendingUp, Clock, MessageSquare, HelpCircle, Mail, Send, MessageCircle, BookOpen, Smartphone, Percent, X, LogOut } from 'lucide-react';
+import { Download, User, Store, Plus, TrendingUp, Clock, MessageSquare, HelpCircle, Mail, Send, MessageCircle, BookOpen, Smartphone, Percent, X, LogOut, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserProfile } from '@/contexts/UserProfileContext';
 import { getAllCategories } from '@/lib/supabase-categories';
@@ -20,7 +18,6 @@ export function MobileMenuPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [showSendThought, setShowSendThought] = useState(false);
   const [showThoughtInbox, setShowThoughtInbox] = useState(false);
-  const [showHelpDialog, setShowHelpDialog] = useState(false);
   const [currentPlan, setCurrentPlan] = useState<ShopOwnerPlan | null>(null);
   const [planLoading, setPlanLoading] = useState(false);
   const { user: currentUser, signOut, userRole, roleLoading, aggregatedData } = useAuth();
@@ -35,7 +32,6 @@ export function MobileMenuPage() {
           const plan = await getLatestPlanForEmail(currentUser.email);
           setCurrentPlan(plan);
         } catch (error) {
-          console.error('Error fetching user plan:', error);
           setCurrentPlan(null);
         } finally {
           setPlanLoading(false);
@@ -81,7 +77,7 @@ export function MobileMenuPage() {
       const alarmBridge = (window as any).AlarmBridge;
       if (alarmBridge && typeof alarmBridge.downloadAndInstallApk === 'function') {
         alarmBridge.downloadAndInstallApk(sanitizedUrl);
-        toast.success('Downloading update... Please follow the installation prompts when finished.');
+        toast.success('Downloading update...');
       } else {
         window.open(sanitizedUrl, '_blank');
       }
@@ -91,202 +87,183 @@ export function MobileMenuPage() {
   const preloadBarberPortal = () => import('@/components/BarberPortal');
   const isHighestPlan = currentPlan?.plan_name === 'premium';
 
+  // Helper for rendering menu items consistently
+  const MenuItem = ({ icon: Icon, label, onClick, highlight = false, badge = null }: any) => (
+    <button 
+      onClick={onClick}
+      className={`w-full flex items-center justify-between p-4 mb-2 rounded-2xl transition-colors ${highlight ? 'bg-red-50 text-red-600 dark:bg-red-950/30' : 'bg-slate-50 text-slate-700 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-200'}`}
+    >
+      <div className="flex items-center gap-3">
+        <Icon className={`h-5 w-5 ${highlight ? 'text-red-600' : 'text-slate-500'}`} />
+        <span className="font-semibold text-sm">{label}</span>
+      </div>
+      <div className="flex items-center gap-2">
+        {badge}
+        <ChevronRight className={`h-4 w-4 ${highlight ? 'text-red-300' : 'text-slate-300'}`} />
+      </div>
+    </button>
+  );
+
   return (
-    <div className="min-h-screen bg-white dark:bg-slate-900 w-full flex flex-col relative z-0" style={{ transform: 'translateZ(0)', WebkitTransform: 'translateZ(0)', backfaceVisibility: 'hidden', contain: 'content' }}>
-      {/* Header - Always loaded instantly */}
-      <div className="flex items-center justify-between p-4 border-b border-border/40 bg-white dark:bg-slate-900 z-20">
-        <h1 className="text-xl sm:text-2xl font-bold">Menu</h1>
-        <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="rounded-full">
+    <div className="w-full bg-white dark:bg-slate-950 min-h-screen pb-20">
+      
+      {/* HEADER - No sticky, no shadow */}
+      <div className="flex items-center justify-between p-5 bg-white dark:bg-slate-950">
+        <h1 className="text-2xl font-black text-slate-900 dark:text-white">Menu</h1>
+        <button 
+          onClick={() => navigate(-1)} 
+          className="p-2 bg-slate-100 dark:bg-slate-800 rounded-full text-slate-600 dark:text-slate-300 active:bg-slate-200"
+        >
           <X className="h-6 w-6" />
-        </Button>
+        </button>
       </div>
 
-      {/* Content Container */}
-      <div className="flex-1 px-4 py-4 space-y-4 pb-20">
+      <div className="px-5 space-y-6">
         
-        {/* User Profile & Primary Action */}
-        <div className="space-y-4">
-            {currentUser && (
-              <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 border border-border/50">
-                <div className="flex-shrink-0 h-10 w-10 rounded-full bg-muted flex items-center justify-center border border-border">
-                  <User className="h-5 w-5 text-muted-foreground" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold truncate text-gray-900 dark:text-white">{currentUser.email}</p>
-                  <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">
-                    {roleLoading ? 'Loading...' : aggregatedData?.isShopOwner ? 'Shop Owner' : 'Customer'}
-                  </p>
-                </div>
-              </div>
-            )}
-            
-            {!roleLoading && currentUser && (
-              userRole?.type !== 'shop_owner' ? (
-                <Button
-                  variant="outline"
-                  className="w-full justify-start h-12 font-medium rounded-lg text-base border-border/50"
-                  onClick={() => navigate('/create-shop')}
-                >
-                  <Plus className="mr-3 h-5 w-5 text-muted-foreground" />
-                  Create Shop
-                </Button>
-              ) : (
-                <Button
-                  variant="outline"
-                  className="w-full justify-start h-12 font-medium rounded-lg disabled:opacity-50 text-base border-border/50"
-                  onClick={() => navigate('/create-shop')}
-                  disabled={planLoading || isHighestPlan}
-                >
-                  <TrendingUp className="mr-3 h-5 w-5 text-muted-foreground" />
-                  {planLoading ? 'Loading...' : isHighestPlan ? 'Highest Plan' : 'Upgrade Plan'}
-                </Button>
-              )
-            )}
-          </div>
-
-        {/* Owner Portal */}
-        {!roleLoading && (userRole?.type === 'shop_owner' || aggregatedData?.isShopOwner) && (
-          <div className="border-t pt-4 space-y-2">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3 px-2 flex items-center gap-2">
-              <Store className="h-4 w-4" />
-              Owner Portal
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              <Button variant="outline" className="justify-start h-10 text-xs font-medium rounded-lg border-border/50 px-2" onMouseEnter={preloadBarberPortal} onClick={() => navigate('/portal?tab=dashboard')}>Dashboard</Button>
-              <Button variant="outline" className="justify-start h-10 text-xs font-medium rounded-lg border-border/50 px-2" onClick={() => navigate('/portal?tab=bookings')}>Requests</Button>
-              <Button variant="outline" className="justify-start h-10 text-xs font-medium rounded-lg border-border/50 px-2" onClick={() => navigate('/portal?tab=settings')}>Settings</Button>
-              <Button variant="outline" className="justify-start h-10 text-xs font-medium rounded-lg border-border/50 px-2" onMouseEnter={preloadBarberPortal} onClick={() => navigate('/portal?tab=campaigns')}>Campaigns</Button>
-              <Button variant="outline" className="justify-start h-10 text-xs font-medium rounded-lg border-border/50 px-2" onClick={() => navigate('/portal?tab=customization')}>Design</Button>
-              <Button variant="outline" className="justify-start h-10 text-xs font-medium rounded-lg border-border/50 px-2" onClick={() => navigate('/portal?tab=uploads')}>Uploads</Button>
-              <Button variant="outline" className="justify-start h-10 text-xs font-medium rounded-lg border-border/50 px-2" onClick={() => navigate('/portal?tab=preview')}>Preview</Button>
-              <Button variant="outline" className="justify-start h-10 text-xs font-medium rounded-lg border-border/50 px-2" onClick={() => navigate('/portal?tab=website')}>Website</Button>
-              <Button variant="outline" className="justify-start h-10 text-xs font-medium rounded-lg border-border/50 px-2" onClick={() => navigate('/portal?tab=khata-book')}>
-                <BookOpen className="mr-2 h-4 w-4 text-muted-foreground" /> Khata
-              </Button>
+        {/* PROFILE SECTION */}
+        {currentUser && (
+          <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-3xl flex items-center gap-4">
+            <div className="h-12 w-12 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center shrink-0">
+              <User className="h-6 w-6 text-slate-500" />
             </div>
-            <Button
-              variant="secondary"
-              className="w-full justify-start h-10 font-medium rounded-lg mt-2 text-xs bg-muted/50"
+            <div className="flex-1 overflow-hidden">
+              <p className="font-bold text-slate-900 dark:text-white truncate">{currentUser.email}</p>
+              <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mt-0.5">
+                {roleLoading ? 'Loading...' : aggregatedData?.isShopOwner ? 'Shop Owner' : 'Customer'}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* PRIMARY ACTION */}
+        {!roleLoading && currentUser && (
+          userRole?.type !== 'shop_owner' ? (
+            <button 
+              onClick={() => navigate('/create-shop')}
+              className="w-full bg-red-500 text-white p-4 rounded-2xl flex items-center justify-center gap-2 font-bold active:bg-red-600"
+            >
+              <Plus className="h-5 w-5" />
+              Create Your Shop
+            </button>
+          ) : (
+            <button 
+              onClick={() => navigate('/create-shop')}
+              disabled={planLoading || isHighestPlan}
+              className={`w-full p-4 rounded-2xl flex items-center justify-center gap-2 font-bold ${isHighestPlan ? 'bg-slate-100 text-slate-400' : 'bg-red-500 text-white active:bg-red-600'}`}
+            >
+              <TrendingUp className="h-5 w-5" />
+              {planLoading ? 'Loading...' : isHighestPlan ? 'Highest Plan Active' : 'Upgrade Plan'}
+            </button>
+          )
+        )}
+
+        {/* OWNER PORTAL */}
+        {!roleLoading && (userRole?.type === 'shop_owner' || aggregatedData?.isShopOwner) && (
+          <div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 px-1">Owner Portal</p>
+            <MenuItem icon={Store} label="Dashboard" onClick={() => { preloadBarberPortal(); navigate('/portal?tab=dashboard'); }} />
+            <MenuItem icon={Clock} label="Requests" onClick={() => navigate('/portal?tab=bookings')} />
+            <MenuItem icon={Plus} label="Campaigns" onClick={() => navigate('/portal?tab=campaigns')} />
+            <MenuItem icon={BookOpen} label="Khata Book" onClick={() => navigate('/portal?tab=khata-book')} />
+            
+            <button 
               onMouseEnter={preloadBarberPortal}
               onClick={() => navigate('/portal')}
+              className="w-full bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 p-4 rounded-2xl flex items-center justify-center gap-2 font-bold mt-2 active:bg-slate-800"
             >
-              <Store className="mr-2 h-4 w-4 text-muted-foreground" />
-              Owner's Portal
-            </Button>
+              Open Full Portal
+            </button>
           </div>
         )}
 
-        {/* Profile Tabs & Messages */}
+        {/* PROFILE MANAGEMENT */}
+        {currentUser && aggregatedData?.isShopOwner && (
+           <div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 px-1">Profile</p>
+            <MenuItem icon={Clock} label="Today" onClick={() => navigate('/profile?tab=today')} />
+            <MenuItem icon={TrendingUp} label="History" onClick={() => navigate('/profile?tab=history')} />
+            <MenuItem icon={User} label="Posts" onClick={() => navigate('/profile?tab=posts')} />
+           </div>
+        )}
+
+        {/* MESSAGES & OFFERS */}
         {currentUser && (
-          <div className="space-y-4">
-            {aggregatedData?.isShopOwner && (
-              <div className="border-t pt-4 space-y-2">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3 px-2">Profile Management</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button variant="outline" className="justify-start h-10 text-xs font-medium rounded-lg border-border/50 px-2" onClick={() => navigate('/profile?tab=today')}><Clock className="mr-2 h-4 w-4 text-muted-foreground" /> Today</Button>
-                  <Button variant="outline" className="justify-start h-10 text-xs font-medium rounded-lg border-border/50 px-2" onClick={() => navigate('/profile?tab=history')}><TrendingUp className="mr-2 h-4 w-4 text-muted-foreground" /> History</Button>
-                  <Button variant="outline" className="justify-start h-10 text-xs font-medium rounded-lg border-border/50 px-2" onClick={() => navigate('/profile?tab=campaigns')}><Plus className="mr-2 h-4 w-4 text-muted-foreground" /> Campaigns</Button>
-                  <Button variant="outline" className="justify-start h-10 text-xs font-medium rounded-lg border-border/50 px-2" onClick={() => navigate('/profile?tab=posts')}><User className="mr-2 h-4 w-4 text-muted-foreground" /> Posts</Button>
-                </div>
-              </div>
-            )}
+          <div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 px-1">Social & Offers</p>
+            <MenuItem icon={MessageCircle} label="Chat Inbox" onClick={() => navigate('/profile?tab=inbox')} />
+            <MenuItem icon={MessageSquare} label="My Thoughts" onClick={() => setShowThoughtInbox(true)} />
+            <MenuItem icon={Percent} label="Exclusive Offers" highlight onClick={() => navigate('/offers-list')} />
+          </div>
+        )}
 
-            <div className="border-t pt-4 space-y-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-2 mb-2">My Messages</p>
-              <div className="grid grid-cols-2 gap-2">
-                <Button variant="outline" className="justify-start h-12 font-medium rounded-lg text-sm px-2 border-border/50" onClick={() => navigate('/profile?tab=inbox')}><MessageCircle className="mr-2 h-5 w-5 text-muted-foreground" /> Chat Inbox</Button>
-                <Button variant="outline" className="justify-start h-12 font-medium rounded-lg text-sm px-2 border-border/50" onClick={() => setShowThoughtInbox(true)}><MessageSquare className="mr-2 h-5 w-5 text-muted-foreground" /> My Thoughts</Button>
-                <Button variant="outline" className="justify-start h-12 font-medium rounded-lg text-sm px-2 col-span-2 mt-2 border-border/50" onClick={() => navigate('/offers-list')}><Percent className="mr-2 h-5 w-5 text-muted-foreground" /> Exclusive Offers</Button>
-              </div>
+        {/* SHOP CATEGORIES */}
+        {categories.length > 0 && (
+          <div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 px-1">Categories</p>
+            <div className="grid grid-cols-2 gap-3">
+              {categories.map((category) => (
+                <button 
+                  key={category.id} 
+                  onClick={() => navigate(`/category/${category.id}`)}
+                  className="bg-slate-50 dark:bg-slate-900 p-4 rounded-2xl flex flex-col items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200 active:bg-slate-100"
+                >
+                  <span className="text-2xl">{category.icon}</span>
+                  <span className="truncate w-full text-center text-xs">{category.name}</span>
+                </button>
+              ))}
             </div>
           </div>
         )}
 
-        {/* Categories & Support */}
-        <div className="space-y-4">
-          {categories.length > 0 && (
-              <div className="border-t pt-4">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3 px-2">Shop Categories</p>
-                <div className="grid grid-cols-2 gap-2">
-                  {categories.map((category) => (
-                    <Button key={category.id} variant="outline" className="justify-start h-10 text-xs font-medium rounded-lg border-border/50 px-2" onClick={() => navigate(`/category/${category.id}`)}>
-                      <span className="mr-2 text-muted-foreground">{category.icon}</span> {category.name}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            )}
+        {/* SUPPORT */}
+        <div>
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 px-1">Support & Legal</p>
+          <MenuItem icon={Send} label="Send Thought" onClick={() => setShowSendThought(true)} />
+          <MenuItem icon={MessageCircle} label="WhatsApp Support" onClick={() => window.open('https://wa.me/917508990616?text=Hi%2C%20I%20need%20help', '_blank')} />
+          <MenuItem icon={Mail} label="Email Us" onClick={() => window.open('mailto:pv173597@gmail.com')} />
+          <MenuItem icon={HelpCircle} label="Terms & Conditions" onClick={() => navigate('/terms-conditions')} />
+          <MenuItem icon={HelpCircle} label="Refund Policy" onClick={() => navigate('/refund-policy')} />
+          <MenuItem icon={BookOpen} label="Staff Portal" onClick={() => navigate('/staff-portal')} />
+        </div>
 
-            {currentUser && (
-              <div className="border-t pt-4 space-y-3">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-2">Support</p>
-                <Button variant="outline" className="w-full justify-start h-12 font-medium rounded-lg text-sm border-border/50" onClick={() => setShowSendThought(true)}><Send className="mr-3 h-5 w-5 text-muted-foreground" /> Send Thought</Button>
-                <div className="grid grid-cols-2 gap-2">
-                  <a href="https://wa.me/917508990616?text=Hi%2C%20I%20need%20help%20with%20the%20app" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center h-12 rounded-lg border border-border/50 text-foreground font-medium text-sm px-2">
-                    <svg className="h-5 w-5 mr-2 text-muted-foreground" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.67-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.076 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421-7.403h-.006c-1.405 0-2.734-.474-3.803-1.37-.968-.81-1.566-1.966-1.566-3.164C6.676 3.075 8.751 1 11.277 1c1.38 0 2.677.474 3.754 1.367 1.077.893 1.741 2.12 1.741 3.45 0 2.526-2.075 4.565-4.495 4.565z" /></svg>
-                    WhatsApp
-                  </a>
-                  <a href="mailto:pv173597@gmail.com" className="flex items-center justify-center h-12 rounded-lg border border-border/50 text-foreground font-medium text-sm px-2"><Mail className="h-5 w-5 mr-2 text-muted-foreground" /> Email</a>
-                </div>
-                <Button variant="outline" className="w-full justify-start h-12 font-medium rounded-lg text-sm border-border/50" onClick={() => setShowHelpDialog(true)}><HelpCircle className="mr-3 h-5 w-5 text-muted-foreground" /> Full Help Guide</Button>
-              </div>
-            )}
-          </div>
-
-        {/* Policies & Sign Out */}
-        {/* Policies & Sign Out */}
-        <div className="space-y-4">
-          <div className="border-t pt-4 space-y-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-2 mb-2">Policies</p>
-              <div className="grid grid-cols-2 gap-2">
-                <Button variant="outline" className="justify-start h-10 text-xs font-medium rounded-lg px-2 border-border/50" onClick={() => navigate('/contact-us')}>Contact Us</Button>
-                <Button variant="outline" className="justify-start h-10 text-xs font-medium rounded-lg px-2 border-border/50" onClick={() => navigate('/terms-conditions')}>Terms</Button>
-                <Button variant="outline" className="justify-start h-10 text-xs font-medium rounded-lg px-2 col-span-2 border-border/50" onClick={() => navigate('/refund-policy')}>Refund Policy</Button>
-              </div>
+        {/* APP VERSION */}
+        <div className="bg-slate-50 dark:bg-slate-900 p-5 rounded-3xl mb-4">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2 text-slate-500">
+              <Smartphone className="h-5 w-5" />
+              <span className="text-xs font-bold uppercase tracking-widest">Version</span>
             </div>
-
-            <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground mt-2" onClick={() => navigate('/staff-portal')} title="Staff Portal"><BookOpen className="h-5 w-5" /></Button>
-
-            {currentUser && (
-              <Button variant="outline" className="w-full justify-start h-12 font-medium rounded-lg text-sm mb-4 mt-4 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 border-red-200 dark:border-red-900/50" onClick={handleSignOut}><LogOut className="mr-3 h-5 w-5" /> Sign Out</Button>
-            )}
+            <span className="font-black text-slate-900 dark:text-white">v{localVersion}</span>
           </div>
-
-        {/* App Version */}
-        <div className="mt-8 border-t pt-4 pb-8 px-2">
-          <div className="flex items-center justify-between mb-3 bg-muted/10 p-3 rounded-lg border border-border/50">
-              <div className="flex items-center gap-2">
-                <Smartphone className="h-4 w-4 text-muted-foreground" />
-                <div>
-                  <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-tight">Installed</p>
-                  <p className="text-xs font-semibold text-foreground">v{localVersion}</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="flex items-center justify-end gap-1">
-                  {hasUpdate && <span className="flex h-2 w-2 rounded-full bg-muted-foreground" />}
-                  <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-tight">{hasUpdate ? 'New Available' : 'Latest Version'}</p>
-                </div>
-                <p className={`text-xs font-semibold text-foreground`}>v{updateData?.latest_version || localVersion}</p>
-              </div>
+          
+          {hasUpdate ? (
+            <button 
+              onClick={handleUpdate}
+              className="w-full bg-green-500 text-white p-4 rounded-2xl flex items-center justify-center gap-2 font-bold active:bg-green-600"
+            >
+              <Download className="h-5 w-5" />
+              Update to v{updateData?.latest_version}
+            </button>
+          ) : (
+            <div className="text-center p-3 bg-slate-200/50 dark:bg-slate-800 rounded-2xl text-xs font-bold text-slate-500 uppercase tracking-widest">
+              Up to date
             </div>
-            {hasUpdate ? (
-              <Button onClick={handleUpdate} variant="outline" className="w-full font-semibold rounded-lg h-12 border-border/50"><Download className="mr-2 h-4 w-4 text-muted-foreground" /> UPDATE APP NOW</Button>
-            ) : (
-              <div className="flex justify-center py-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">System Up to Date</div>
-            )}
-          </div>
+          )}
+        </div>
+
+        {/* SIGN OUT */}
+        {currentUser && (
+          <button 
+            onClick={handleSignOut}
+            className="w-full p-4 bg-red-50 dark:bg-red-950/30 text-red-600 rounded-2xl flex items-center justify-center gap-2 font-bold mb-10 active:bg-red-100"
+          >
+            <LogOut className="h-5 w-5" />
+            Sign Out
+          </button>
+        )}
+
       </div>
 
-      <Dialog open={showHelpDialog} onOpenChange={setShowHelpDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader><DialogTitle>Help & Support</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <p className="text-sm">Contact WhatsApp: +91 7508990616</p>
-            <Button variant="outline" onClick={() => setShowHelpDialog(false)} className="w-full">Close</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
       <SendThoughtModal isOpen={showSendThought} onClose={() => setShowSendThought(false)} />
       <ThoughtInboxModal isOpen={showThoughtInbox} onClose={() => setShowThoughtInbox(false)} />
     </div>

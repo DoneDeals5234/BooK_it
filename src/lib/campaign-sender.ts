@@ -15,10 +15,6 @@ interface Campaign {
   shop_id?: string;
 }
 
-/**
- * Sends a campaign via the send-realtime-campaign Edge Function
- * This triggers both instant Realtime broadcast and FCM backup
- */
 export async function sendCampaignDirectly(
   campaign: Campaign,
   target: CampaignTarget
@@ -26,38 +22,93 @@ export async function sendCampaignDirectly(
   console.log('🚀 Starting hybrid campaign send (Realtime + FCM Native)...');
 
   try {
-    // 1. Call the Edge Function
-    const { data, error } = await supabase.functions.invoke('send-realtime-campaign', {
+    // 1. Try to call the Edge Function first
+    const { data: edgeData, error: edgeError } = await supabase.functions.invoke('send-realtime-campaign', {
       body: {
         campaign_id: campaign.id,
         target: target
       }
     });
 
-    if (error) {
-      console.error('❌ Edge Function error:', error);
-      throw new Error(`Failed to trigger campaign: ${error.message}`);
+    if (!edgeError) {
+      console.log('✅ Campaign triggered successfully via Edge Function:', edgeData);
+      return {
+        success: true,
+        matchedCount: edgeData.users_targeted || 0,
+        sentCount: edgeData.users_targeted || 0,
+      };
     }
 
-    console.log('✅ Campaign triggered successfully:', data);
+    console.warn('⚠️ Edge Function failed or not deployed, falling back to direct client execution...', edgeError);
 
-    // 2. Query matched users for logging
-    const { data: matchedUsers } = await supabase
-      .from('user_profiles')
-      .select('user_id')
-      .eq('country', target.country)
-      .match({
-        ...(target.state ? { state: target.state } : {}),
-        ...(target.district ? { district: target.district } : {}),
-        ...(target.village ? { village: target.village } : {}),
+    // 2. Fetch full campaign data
+    const { data: campaignData, error: fetchError } = await supabase
+      .from('campaigns')
+      .select('*')
+      .eq('id', campaign.id)
+      .single();
+
+    if (fetchError || !campaignData) {
+      throw new Error(`Failed to fetch campaign data: ${fetchError?.message}`);
+    }
+
+    // 3. Trigger Realtime Broadcast directly
+    console.log('📡 Inserting into campaign_broadcasts...');
+    const { error: broadcastError } = await supabase
+      .from('campaign_broadcasts')
+      .insert({
+        campaign_id: campaignData.id,
+        title: campaignData.title,
+        message: campaignData.message,
+        image_url: campaignData.image_url,
+        shop_id: campaignData.shop_id,
+        target: target || {}
       });
 
-    const count = matchedUsers?.length || 0;
+    if (broadcastError) {
+      console.warn('⚠️ Realtime broadcast insert failed (might need RLS update):', broadcastError.message);
+    }
+
+    // 4. Update Campaign Status
+    await supabase
+      .from('campaigns')
+      .update({ status: 'sent', sent_at: new Date().toISOString() })
+      .eq('id', campaign.id);
+
+    // 5. Query matching users for FCM
+    let query = supabase.from('user_profiles').select('user_id');
+    if (target.country) query = query.eq('country', target.country);
+    if (target.state) query = query.eq('state', target.state);
+    if (target.district) query = query.eq('district', target.district);
+    if (target.village) query = query.eq('village', target.village);
+
+    const { data: matchedUsers } = await query;
+    const userIds = (matchedUsers || []).map((u: any) => u.user_id).filter(Boolean);
+    console.log(`🎯 Matched ${userIds.length} users by geography`);
+
+    // 6. Trigger Native Notifications
+    if (userIds.length > 0) {
+      console.log(`🔥 Invoking send-native-notification for ${userIds.length} users...`);
+      await supabase.functions.invoke('send-native-notification', {
+        body: {
+          userIds,
+          title: campaignData.title,
+          body: campaignData.message,
+          data: {
+            type: 'campaign',
+            campaign_id: campaign.id,
+            route: '/',
+            ...(campaignData.image_url ? { imageUrl: campaignData.image_url } : {}),
+            ...(campaignData.shop_id ? { shop_id: campaignData.shop_id } : {})
+          }
+        }
+      });
+    }
 
     return {
       success: true,
-      matchedCount: count,
-      sentCount: count,
+      matchedCount: userIds.length,
+      sentCount: userIds.length,
     };
   } catch (error) {
     const errorMessage =

@@ -430,6 +430,7 @@ export const uploadProfileImage = async (
       .from('profiles')
       .upload(filePath, file, {
         upsert: true,
+        contentType: file.type || 'image/jpeg',
         metadata: {
           user_id: userId
         }
