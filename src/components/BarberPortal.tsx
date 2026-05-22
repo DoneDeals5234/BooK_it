@@ -134,6 +134,9 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
   // Settings form states
   const [formData, setFormData] = useState<Partial<Shop>>({});
   const [isAutoSaving, setIsAutoSaving] = useState(false);
+  const [isHeaderHidden, setIsHeaderHidden] = useState(false);
+  const initialMount = useRef(true);
+
   const [currentPlan, setCurrentPlan] = useState<ShopOwnerPlan | null>(null);
   const [newService, setNewService] = useState({ name: '', price: '' });
   const [newBarber, setNewBarber] = useState({ name: '', experience: '', imageUrl: '' });
@@ -525,35 +528,25 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
     toast.custom((t) => (
       <div
         className={`${t.visible ? 'animate-enter' : 'animate-leave'
-          } max-w-md w-full bg-white dark:bg-slate-900 shadow-xl rounded-2xl pointer-events-auto flex ring-1 ring-black ring-opacity-5 overflow-hidden border-2 border-red-500`}
+          } w-max max-w-[90vw] sm:max-w-md bg-white dark:bg-slate-900 shadow-lg rounded-full pointer-events-auto flex items-center px-3 py-2 border border-slate-100 dark:border-slate-800`}
       >
-        <div className="flex-1 w-0 p-4">
-          <div className="flex items-center">
-            <div className="flex-shrink-0 pt-0.5">
-              <div className="w-12 h-12 bg-red-600 rounded-lg flex items-center justify-center overflow-hidden rotate-[-5deg]">
-                <span className="text-white font-black text-[10px] leading-tight text-center rotate-[25deg]">
-                  BOOK<br />IT
-                </span>
-              </div>
-            </div>
-            <div className="ml-3 flex-1">
-              <p className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">
-                Update Saved
-              </p>
-              <p className="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">
-                {message}
-              </p>
-            </div>
-          </div>
+        <div className="w-5 h-5 bg-red-600 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm mr-2">
+          <span className="text-white font-black text-[5px] leading-none text-center tracking-tighter">
+            BOOK<br/>IT
+          </span>
         </div>
-        <div className="flex border-l border-slate-200 dark:border-slate-800">
-          <button
-            onClick={() => toast.dismiss(t.id)}
-            className="w-full border border-transparent rounded-none rounded-r-lg p-4 flex items-center justify-center text-sm font-bold text-red-600 hover:text-red-500 focus:outline-none"
-          >
-            Close
-          </button>
-        </div>
+        
+        <p className="text-[11px] font-medium text-slate-800 dark:text-slate-200 truncate pr-3 flex-1">
+          <span className="text-red-600 font-bold mr-1.5 uppercase text-[10px]">Saved</span> 
+          {message}
+        </p>
+
+        <button
+          onClick={() => toast.dismiss(t.id)}
+          className="ml-auto pl-3 border-l border-slate-200 dark:border-slate-700 text-[10px] font-bold text-slate-400 hover:text-slate-600 uppercase tracking-wider transition-colors"
+        >
+          Close
+        </button>
       </div>
     ), { duration: 3000, position: 'bottom-center' });
   };
@@ -575,9 +568,10 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
       setIsAutoSaving(false);
     }
   };
-
   const handleFieldBlur = () => {
-    handleSaveSettings();
+    if (formData && Object.keys(formData).length > 0) {
+      handleSaveSettings(formData);
+    }
   };
 
   const handleEditProduct = (product: FeaturedProduct) => {
@@ -1194,9 +1188,21 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
+      onFocusCapture={(e) => {
+        const tagName = (e.target as HTMLElement).tagName;
+        if (tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT') {
+          setIsHeaderHidden(true);
+        }
+      }}
+      onBlurCapture={(e) => {
+        const tagName = (e.target as HTMLElement).tagName;
+        if (tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT') {
+          setIsHeaderHidden(false);
+        }
+      }}
     >
       {/* Premium White Header */}
-      <div className="bg-white dark:bg-slate-950 px-4 pt-6 pb-4 border-b border-slate-100 dark:border-slate-900 sticky top-0 z-30">
+      <div className={`bg-white dark:bg-slate-950 px-4 pt-6 border-b border-slate-100 dark:border-slate-900 sticky top-0 z-30 transition-all duration-300 ease-in-out ${isHeaderHidden ? 'max-h-0 opacity-0 overflow-hidden py-0 border-none' : 'max-h-[300px] opacity-100 pb-4'}`}>
         <div className="flex flex-col gap-6">
           {/* Top Bar */}
           <div className="flex items-center justify-between">
@@ -2863,25 +2869,11 @@ export const BarberPortal = ({ onClose, initialTab = 'dashboard' }: BarberPortal
                     </div>
                   )}
 
-                  <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sticky bottom-0 bg-background/95 backdrop-blur-sm p-3 sm:p-4 -mx-3 sm:-mx-4 -mb-3 sm:-mb-4 border-t">
-                    <p className="text-[10px] text-muted-foreground italic flex-1 flex items-center">
-                      <CheckCircle className="h-3 w-3 mr-1 text-green-500" />
-                      Your changes are saved automatically.
+                  <div className="flex justify-center mt-6">
+                    <p className="text-xs text-muted-foreground italic flex items-center bg-slate-100 dark:bg-slate-900 px-4 py-2 rounded-full shadow-sm">
+                      <CheckCircle className="h-4 w-4 mr-2 text-green-500" />
+                      Changes are saved automatically
                     </p>
-                    <Button
-                      variant="outline"
-                      onClick={() => setCurrentTab('dashboard')}
-                      className="text-sm sm:text-base"
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      onClick={() => handleSaveSettings()}
-                      disabled={savingSettings}
-                      className="text-sm sm:text-base"
-                    >
-                      {savingSettings ? 'Saving...' : 'Save Changes'}
-                    </Button>
                   </div>
                 </div>
               )}

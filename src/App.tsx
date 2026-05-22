@@ -439,6 +439,7 @@ function AppContentInner() {
           } />
 
           <Route path="/staff" element={<StaffPortal onClose={() => navigate('/')} />} />
+          <Route path="/staff-portal" element={<StaffPortal onClose={() => navigate('/')} />} />
 
           <Route path="/portal" element={
             <BarberPortal

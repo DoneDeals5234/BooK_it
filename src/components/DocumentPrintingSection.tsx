@@ -36,6 +36,7 @@ export const DocumentPrintingSection = ({ shopId, shopName, shopLat, shopLng, sh
   const [printType, setPrintType] = useState<'bw' | 'color'>('bw');
   const [sideType, setSideType] = useState<'single' | 'double'>('single');
   const [paperType, setPaperType] = useState<string>('');
+  const [pageCount, setPageCount] = useState<number>(1);
   const [note, setNote] = useState('');
   const [totalPrice, setTotalPrice] = useState(0);
 
@@ -165,7 +166,7 @@ export const DocumentPrintingSection = ({ shopId, shopName, shopLat, shopLng, sh
     if (settings) {
       calculatePrice();
     }
-  }, [settings, printType, sideType]);
+  }, [settings, printType, sideType, pageCount]);
 
   const loadSettings = async () => {
     setLoading(true);
@@ -192,7 +193,7 @@ export const DocumentPrintingSection = ({ shopId, shopName, shopLat, shopLng, sh
     } else {
       price = sideType === 'single' ? settings.priceColorSingle : settings.priceColorDouble;
     }
-    setTotalPrice(price);
+    setTotalPrice(price * pageCount);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -265,7 +266,7 @@ export const DocumentPrintingSection = ({ shopId, shopName, shopLat, shopLng, sh
       const base64Files = await Promise.all(files.map(f => fileToBase64(f)));
 
       // 2. Create main order
-      const description = `Printing Order: ${files.length} document(s) (${printType === 'bw' ? 'B&W' : 'Color'}, ${sideType === 'single' ? 'Single' : 'Double'} Sided, ${paperType})${note ? '\nNote: ' + note : ''}`;
+      const description = `Printing Order: ${files.length} document(s), ${pageCount} total pages (${printType === 'bw' ? 'B&W' : 'Color'}, ${sideType === 'single' ? 'Single' : 'Double'} Sided, ${paperType})${note ? '\nNote: ' + note : ''}`;
       
       const finalAmount = totalPrice + (deliveryType === 'delivery' ? deliveryCost : 0);
       const customerName = userProfile?.name || user.displayName || user.email?.split('@')[0] || 'Customer';
@@ -422,6 +423,17 @@ export const DocumentPrintingSection = ({ shopId, shopName, shopLat, shopLng, sh
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-xs font-black uppercase text-slate-400">Total Pages</Label>
+                  <Input 
+                    type="number" 
+                    min="1" 
+                    value={pageCount} 
+                    onChange={(e) => setPageCount(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="h-11 font-bold"
+                  />
                 </div>
               </div>
             </div>

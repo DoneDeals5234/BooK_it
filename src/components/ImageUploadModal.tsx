@@ -1,9 +1,8 @@
-import { useState } from 'react';
+import { useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Camera, Upload, X, Loader2 } from 'lucide-react';
+import { Camera, Upload, X } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useCameraCapture } from '@/lib/use-camera-capture';
 
 interface ImageUploadModalProps {
   isOpen: boolean;
@@ -20,55 +19,21 @@ export const ImageUploadModal = ({
   imageType = 'image',
   title = 'Add Image',
 }: ImageUploadModalProps) => {
-  const [loading, setLoading] = useState(false);
-  const { capturePhoto } = useCameraCapture();
+  const uploadInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
 
-  const handleUploadClick = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.onchange = (e: any) => {
-      const file = e.target.files?.[0];
-      if (file) {
-        // Validate file size (max 5MB)
-        if (file.size > 5 * 1024 * 1024) {
-          toast.error('File size must be less than 5MB');
-          return;
-        }
-        onImageSelected(file);
-        onClose();
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('File size must be less than 5MB');
+        return;
       }
-    };
-    input.click();
-  };
-
-  const handleCameraClick = async () => {
-    setLoading(true);
-    try {
-      const photo = await capturePhoto();
-      if (photo) {
-        // Convert base64 to File
-        const base64String = photo.webPath || '';
-        const byteCharacters = atob(base64String.split(',')[1] || base64String);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], { type: 'image/jpeg' });
-        const file = new File([blob], `camera-${Date.now()}.jpg`, { type: 'image/jpeg' });
-
-        onImageSelected(file);
-        onClose();
-        toast.success('Photo captured successfully!');
-      }
-    } catch (error: any) {
-      console.error('Camera capture error:', error);
-      toast.error(error.message || 'Failed to capture photo');
-    } finally {
-      setLoading(false);
+      onImageSelected(file);
+      onClose();
     }
   };
 
@@ -90,11 +55,27 @@ export const ImageUploadModal = ({
             Choose how you'd like to add your {imageType}
           </p>
 
+          {/* Hidden Inputs for Native File Handling */}
+          <input
+            type="file"
+            accept="image/*"
+            ref={uploadInputRef}
+            onChange={handleFileChange}
+            className="hidden"
+          />
+          <input
+            type="file"
+            accept="image/*"
+            capture="environment"
+            ref={cameraInputRef}
+            onChange={handleFileChange}
+            className="hidden"
+          />
+
           <div className="grid grid-cols-1 gap-3">
             {/* Upload from Device */}
             <Button
-              onClick={handleUploadClick}
-              disabled={loading}
+              onClick={() => uploadInputRef.current?.click()}
               className="h-24 flex flex-col items-center justify-center gap-2 bg-blue-500 hover:bg-blue-600 text-white"
             >
               <Upload className="h-6 w-6" />
@@ -104,22 +85,12 @@ export const ImageUploadModal = ({
 
             {/* Capture from Camera */}
             <Button
-              onClick={handleCameraClick}
-              disabled={loading}
+              onClick={() => cameraInputRef.current?.click()}
               className="h-24 flex flex-col items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white"
             >
-              {loading ? (
-                <>
-                  <Loader2 className="h-6 w-6 animate-spin" />
-                  <span className="text-sm font-medium">Opening Camera...</span>
-                </>
-              ) : (
-                <>
-                  <Camera className="h-6 w-6" />
-                  <span className="text-sm font-medium">Capture from Camera</span>
-                  <span className="text-xs opacity-90">Take a photo</span>
-                </>
-              )}
+              <Camera className="h-6 w-6" />
+              <span className="text-sm font-medium">Capture from Camera</span>
+              <span className="text-xs opacity-90">Take a photo</span>
             </Button>
           </div>
 

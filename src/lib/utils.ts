@@ -12,6 +12,22 @@ export function sanitizeSupabaseUrl(url: string | null | undefined): string {
   const customDomain = 'database.donedeals.shop';
   const oldDomainSuffix = 'supabase.co';
   
+  // Fix local docker URLs (kong:8000 or localhost:8000) that might have been saved during dev
+  if (url.includes('kong:8000') || url.includes('localhost:8000') || url.includes('127.0.0.1:8000') || url.includes('10.0.2.2:8000')) {
+    try {
+      if (url.startsWith('http')) {
+        const parsedUrl = new URL(url);
+        parsedUrl.hostname = customDomain;
+        parsedUrl.protocol = 'https:';
+        parsedUrl.port = '';
+        return parsedUrl.toString();
+      }
+    } catch (e) {
+      // Fallback
+    }
+    return url.replace(/https?:\/\/(kong|localhost|127\.0\.0\.1|10\.0\.2\.2):8000/gi, `https://${customDomain}`);
+  }
+
   // Replace old supabase.co URLs with the custom domain
   if (url.includes(oldDomainSuffix)) {
     try {

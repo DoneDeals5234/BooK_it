@@ -439,9 +439,12 @@ const OrderCard = ({ order, actionLoading, handleAccept, handleRejectClick, hand
               <span className="text-[10px] font-black text-red-600 uppercase tracking-widest flex items-center gap-1"><Printer className="h-3 w-3" /> Print Details</span>
               <Button size="sm" variant="ghost" className="h-6 text-[10px] font-black text-red-600" onClick={() => onViewImages(order.printing.documentUrls, 0)}>VIEW DOCUMENTS</Button>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <span className="px-2 py-0.5 rounded-lg bg-white text-[9px] font-bold text-red-800">{order.printing.isColor ? 'Color' : 'B&W'}</span>
               <span className="px-2 py-0.5 rounded-lg bg-white text-[9px] font-bold text-red-800">{order.printing.isDoubleSided ? 'Double-sided' : 'Single-sided'}</span>
+              {order.printing.pageCount && (
+                <span className="px-2 py-0.5 rounded-lg bg-white text-[9px] font-bold text-red-800">{order.printing.pageCount} Pages Total</span>
+              )}
             </div>
           </div>
         )}

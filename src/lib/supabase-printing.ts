@@ -18,6 +18,7 @@ export interface PrintingOrder {
   paperType: string;
   isDoubleSided: boolean;
   isColor: boolean;
+  pageCount?: number;
   customerNote?: string;
   createdAt?: string;
 }
@@ -87,6 +88,7 @@ export const createPrintingOrder = async (order: PrintingOrder): Promise<boolean
         paper_type: order.paperType,
         is_double_sided: order.isDoubleSided,
         is_color: order.isColor,
+        page_count: order.pageCount,
         customer_note: order.customerNote,
       }]);
 
@@ -116,6 +118,7 @@ export const getPrintingOrderForMainOrder = async (orderId: string): Promise<Pri
       paperType: data.paper_type,
       isDoubleSided: data.is_double_sided,
       isColor: data.is_color,
+      pageCount: data.page_count,
       customerNote: data.customer_note,
       createdAt: data.created_at,
     };
@@ -145,6 +148,7 @@ export const getBatchPrintingOrdersForOrders = async (orderIds: string[]): Promi
         paperType: row.paper_type,
         isDoubleSided: row.is_double_sided,
         isColor: row.is_color,
+        pageCount: row.page_count,
         customerNote: row.customer_note,
         createdAt: row.created_at,
       };

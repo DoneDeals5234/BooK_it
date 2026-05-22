@@ -111,49 +111,44 @@ export const ShopDetailsPage = ({
     loadCustomization();
   }, [shopId]);
 
+  const fetchBookings = async () => {
+    try {
+      const allBookings = await getAllBookingsFromSupabase();
+      const shopBookings = allBookings.filter((b) => b.shopId === shopId);
+      const bookingsWithProfiles = await Promise.all(
+        shopBookings.map(async (booking) => {
+          let profile: UserProfile | undefined;
+          if (booking.userId) {
+            const userProfile = await getUserProfile(booking.userId);
+            profile = userProfile || undefined;
+          }
+          return {
+            ...booking,
+            customerProfile: profile,
+          };
+        })
+      );
+      setBookings(bookingsWithProfiles);
+    } catch (error) {
+      console.error('Error fetching bookings:', error);
+    }
+  };
+
   useEffect(() => {
     const loadShopAndBookings = async () => {
       try {
-        const [shopData, allBookings] = await Promise.all([
-          getShopById(shopId),
-          getAllBookingsFromSupabase(),
-        ]);
-
+        const shopData = await getShopById(shopId);
         setShop(shopData);
 
         // Fetch owner profile to get social links
         if (shopData?.ownerEmail) {
-          // Since we might not have ownerId directly, we search by email
-          // Or if we can find ownerId from somewhere. 
-          // Let's check if Shop has owner_id. 
-          // Actually Shop has ownerEmail.
           const { data: profileData } = await getUserProfileByEmail(shopData.ownerEmail);
           if (profileData) {
             setOwnerProfile(profileData);
           }
         }
 
-        // Filter bookings for this shop and fetch customer profiles
-        const shopBookings = allBookings.filter((b) => b.shopId === shopId);
-        const bookingsWithProfiles = await Promise.all(
-          shopBookings.map(async (booking) => {
-            // Extract userId from the booking's userId field if available
-            // For now, we'll try to get profile by looking up from Supabase
-            let profile: UserProfile | undefined;
-
-            if (booking.userId) {
-              const userProfile = await getUserProfile(booking.userId);
-              profile = userProfile || undefined;
-            }
-
-            return {
-              ...booking,
-              customerProfile: profile,
-            };
-          })
-        );
-
-        setBookings(bookingsWithProfiles);
+        await fetchBookings();
       } catch (error) {
         console.error('Error loading shop and bookings:', error);
       } finally {
@@ -669,20 +664,36 @@ export const ShopDetailsPage = ({
                               key={booking.id}
                               className="bg-white dark:bg-slate-800 p-4 rounded-xl flex items-center gap-4 border border-slate-100 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow"
                             >
-                              <div className="h-10 w-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center text-xs font-bold shrink-0">
-                                #{booking.tokenNumber}
+                              <div className="relative shrink-0">
+                                {booking.customerProfile?.imageUrl ? (
+                                  <img 
+                                    src={booking.customerProfile.imageUrl} 
+                                    alt={booking.customerProfile?.name || booking.userName} 
+                                    className="h-12 w-12 rounded-full object-cover border-2 border-white shadow-sm"
+                                  />
+                                ) : (
+                                  <div className="h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold border-2 border-white shadow-sm">
+                                    {(booking.customerProfile?.name || booking.userName || '?').charAt(0).toUpperCase()}
+                                  </div>
+                                )}
+                                <div className="absolute -top-1 -left-1 h-5 w-5 rounded-full bg-red-600 text-white flex items-center justify-center text-[10px] font-bold shadow-sm border border-white">
+                                  #{booking.tokenNumber}
+                                </div>
                               </div>
                               <div className="flex-1 min-w-0">
-                                <p className="text-sm font-bold truncate">
+                                <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
                                   {booking.customerProfile?.name || booking.userName}
                                 </p>
-                                <div className="flex gap-2 mt-0.5">
-                                  <p className="text-[10px] text-muted-foreground font-medium">
-                                    {booking.booking_date || 'N/A'}
+                                <p className="text-[11px] font-semibold text-primary truncate mt-0.5">
+                                  {booking.serviceName || 'General Service'}
+                                </p>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <p className="text-[10px] text-muted-foreground font-medium flex items-center gap-1">
+                                    <Calendar className="h-3 w-3 opacity-70" /> {booking.bookingDate || (booking as any).booking_date || 'Today'}
                                   </p>
-                                  <p className="text-[10px] text-slate-400">|</p>
-                                  <p className="text-[10px] text-muted-foreground font-medium">
-                                    {booking.timeSlot}
+                                  <p className="text-[10px] text-slate-300">|</p>
+                                  <p className="text-[10px] text-muted-foreground font-medium flex items-center gap-1">
+                                    <Clock className="h-3 w-3 opacity-70" /> {booking.timeSlot}
                                   </p>
                                 </div>
                               </div>
@@ -1040,6 +1051,7 @@ export const ShopDetailsPage = ({
           onBookingCreated={() => {
             setShowBookingModal(false);
             setSelectedServiceForBooking(null);
+            fetchBookings(); // Immediately fetch the new bookings
           }}
         />
       )}

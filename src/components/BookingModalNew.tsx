@@ -73,24 +73,36 @@ export const BookingModalNew = ({
     );
   }
 
-  const loadAvailableSlots = async () => {
-    setLoadingSlots(true);
+  const loadAvailableSlots = () => {
     try {
-      const bookingDate = selectedDate;
-      const allSlots = getAllTimeSlots();
-      const available: string[] = [];
-
-      for (const slot of allSlots) {
-        const isBooked = await isTimeSlotBookedInSupabase(shop.id, slot, bookingDate);
-        if (!isBooked) available.push(slot);
+      const slots: string[] = [];
+      const openTime = shop.openingTime || '09:00';
+      const closeTime = shop.closingTime || '18:00';
+      
+      let [startHour, startMin] = openTime.split(':').map(Number);
+      let [endHour, endMin] = closeTime.split(':').map(Number);
+      
+      let current = new Date();
+      current.setHours(startHour, startMin || 0, 0, 0);
+      
+      let end = new Date();
+      end.setHours(endHour, endMin || 0, 0, 0);
+      
+      while (current < end) {
+        const h = current.getHours();
+        const m = current.getMinutes();
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        const formattedH = h % 12 || 12;
+        const formattedM = m.toString().padStart(2, '0');
+        slots.push(`${formattedH}:${formattedM} ${ampm}`);
+        
+        current.setHours(current.getHours() + 1);
       }
-
-      setAvailableTimeSlots(available);
-      if (available.length === 0) toast.error('No available time slots for today');
+      
+      setAvailableTimeSlots(slots);
+      if (slots.length === 0) toast.error('No available time slots');
     } catch (error) {
       toast.error('Failed to load available slots');
-    } finally {
-      setLoadingSlots(false);
     }
   };
 

@@ -33,7 +33,7 @@ export const SimpleBookingManager = ({ shopId }: SimpleBookingManagerProps) => {
   const [loading, setLoading] = useState(true);
   const [selectedBookingForReject, setSelectedBookingForReject] = useState<Booking | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
-  const [actionLoading, setActionLoading] = useState(false);
+  const [loadingBookingId, setLoadingBookingId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchBookings = async () => {
@@ -81,7 +81,7 @@ export const SimpleBookingManager = ({ shopId }: SimpleBookingManagerProps) => {
   }, [shopId]);
 
   const handleStatusUpdate = async (bookingId: string, status: string, reason?: string) => {
-    setActionLoading(true);
+    setLoadingBookingId(bookingId);
     try {
       const updateData: any = { status };
       if (reason) updateData.rejection_reason = reason;
@@ -92,6 +92,11 @@ export const SimpleBookingManager = ({ shopId }: SimpleBookingManagerProps) => {
         .eq('id', bookingId);
 
       if (error) throw error;
+      
+      // Update local state immediately
+      setBookings((prev) =>
+        prev.map((b) => (b.id === bookingId ? { ...b, ...updateData } : b))
+      );
 
       toast.success(`Booking ${status}!`);
 
@@ -115,7 +120,7 @@ export const SimpleBookingManager = ({ shopId }: SimpleBookingManagerProps) => {
     } catch (error) {
       toast.error('Failed to update booking status');
     } finally {
-      setActionLoading(false);
+      setLoadingBookingId(null);
     }
   };
 
@@ -193,18 +198,18 @@ export const SimpleBookingManager = ({ shopId }: SimpleBookingManagerProps) => {
                     size="sm"
                     className="bg-green-600 hover:bg-green-700 text-white flex-1 sm:flex-none"
                     onClick={() => handleStatusUpdate(booking.id, 'accepted')}
-                    disabled={actionLoading}
+                    disabled={loadingBookingId === booking.id}
                   >
-                    <Check className="h-4 w-4 mr-1" /> Accept
+                    {loadingBookingId === booking.id ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Check className="h-4 w-4 mr-1" />} Accept
                   </Button>
                   <Button
                     size="sm"
                     variant="outline"
                     className="text-red-600 border-red-200 hover:bg-red-50 flex-1 sm:flex-none"
                     onClick={() => setSelectedBookingForReject(booking)}
-                    disabled={actionLoading}
+                    disabled={loadingBookingId === booking.id}
                   >
-                    <X className="h-4 w-4 mr-1" /> Reject
+                    {loadingBookingId === booking.id ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <X className="h-4 w-4 mr-1" />} Reject
                   </Button>
                 </div>
               )}
@@ -243,9 +248,9 @@ export const SimpleBookingManager = ({ shopId }: SimpleBookingManagerProps) => {
                   handleStatusUpdate(selectedBookingForReject.id, 'rejected', rejectionReason);
                 }
               }}
-              disabled={actionLoading}
+              disabled={loadingBookingId === selectedBookingForReject?.id}
             >
-              {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <X className="h-4 w-4 mr-1" />}
+              {loadingBookingId === selectedBookingForReject?.id ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <X className="h-4 w-4 mr-1" />}
               Reject Booking
             </Button>
           </DialogFooter>

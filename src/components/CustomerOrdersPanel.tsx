@@ -272,10 +272,18 @@ const OrderCard = ({ order, onTrack, onComplete, onCancel, onGoToShop, shop, onP
     >
       <CardContent className="p-0">
         {/* Header: Status & ID */}
-        <div className={`px-4 py-2 flex items-center justify-between ${getStatusColor(order.status)}`}>
-          <span className="text-[10px] font-black uppercase tracking-widest opacity-80">
-            ID: {order.order_code || order.otp_code || '------'}
-          </span>
+        <div className={`px-4 py-2 flex items-start justify-between ${getStatusColor(order.status)}`}>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[10px] font-black uppercase tracking-widest opacity-80">
+              ID: {order.order_code || order.otp_code || '------'}
+            </span>
+            {order.created_at && (
+              <span className="text-[8px] font-bold uppercase tracking-wider opacity-70 flex items-center gap-1">
+                <Clock className="h-2.5 w-2.5" />
+                {formatOrderDate(order.created_at)}
+              </span>
+            )}
+          </div>
           <span className="text-[10px] font-black uppercase tracking-widest flex items-center gap-1">
             {order.status === 'accepted' || order.status === 'ready_for_collection' ? (
               <CheckCircle className="h-3 w-3" />

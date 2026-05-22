@@ -487,6 +487,57 @@ export async function updateDeliveryChoice(orderId: string, choice: 'self' | 'bo
     .eq('id', orderId).select().single();
 
   if (error) throw error;
+  
+  // If book_it is chosen, send notification to Fulfillment Mail
+  if (choice === 'book_it') {
+    await supabase.from('admin_notifications').insert({
+      type: 'delivery_request',
+      message: 'New Book It Delivery Request',
+      order_id: orderId,
+      is_read: false
+    });
+
+    try {
+      let fulfillmentEmail = 'system@bookit.com';
+      const { data: userData } = await supabase.auth.getUser();
+      if (userData?.user?.email) {
+        fulfillmentEmail = userData.user.email;
+      }
+
+      await supabase.from('transferred_fulfillment_orders').insert({
+        original_order_id: data.id,
+        fulfillment_email: fulfillmentEmail,
+        shop_id: data.shop_id,
+        customer_id: data.customer_id,
+        customer_name: data.customer_name,
+        customer_phone: data.customer_phone,
+        order_amount: data.order_amount,
+        order_description: data.order_description,
+        status: data.status,
+        rejection_notes: data.rejection_notes,
+        created_at: data.created_at,
+        accepted_at: data.accepted_at,
+        rejected_at: data.rejected_at,
+        ready_at: data.ready_at,
+        collected_at: data.collected_at,
+        expires_at: data.expires_at,
+        fulfillment_status: data.fulfillment_status,
+        delivery_type: data.delivery_type,
+        delivery_choice: data.delivery_choice,
+        unit_price: data.unit_price,
+        delivery_cost: data.delivery_cost,
+        total_amount: data.total_amount,
+        customer_lat: data.customer_lat,
+        customer_lng: data.customer_lng,
+        shop_lat: data.shop_lat,
+        shop_lng: data.shop_lng,
+        shop_name: data.shop_name
+      });
+    } catch (e) {
+      console.error('Failed to insert into transferred_fulfillment_orders:', e);
+    }
+  }
+  
   return data;
 }
 
