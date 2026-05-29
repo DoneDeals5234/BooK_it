@@ -1,0 +1,18 @@
+{
+    "Amount": "राशि",
+    "ZapUPI Payment": "ZapUPI भुगतान",
+    "Pay with ZapUPI": "ZapUPI से भुगतान करें",
+    "Scan QR code or click Pay Now": "QR कोड स्कैन करें या Pay Now दबाएं",
+    "Waiting for payment…": "भुगतान की प्रतीक्षा है…",
+    "Payment Successful! Redirecting…": "भुगतान सफल! रीडायरेक्ट हो रहा है…",
+    "Failed to initiate payment with ZapUPI.": "ZapUPI से भुगतान शुरू करने में विफल।",
+    "Payment already initiated for this invoice. Please try again later.": "इस इनवॉइस के लिए भुगतान पहले से शुरू है। कृपया बाद में पुनः प्रयास करें।",
+    "Unable to create ZapUPI order. Please try again.": "ZapUPI ऑर्डर नहीं बन पाया। कृपया पुनः प्रयास करें।",
+    "Failed to create ZapUPI payment.": "ZapUPI भुगतान बनाने में विफल।",
+    "Unable to create ZapUPI order.": "ZapUPI ऑर्डर बनाने में असमर्थ।",
+    "Payment details are missing.": "भुगतान विवरण गायब हैं।",
+    "Unable to verify payment status.": "भुगतान स्थिति सत्यापित नहीं हो सकी।",
+    "Order not found.": "ऑर्डर नहीं मिला।",
+    "Payment not completed.": "भुगतान पूर्ण नहीं हुआ।",
+    "Payment processed successfully.": "भुगतान सफलतापूर्वक संसाधित।"
+}

@@ -1,0 +1,18 @@
+{
+    "Amount": "رقم",
+    "ZapUPI Payment": "ZapUPI ادائیگی",
+    "Pay with ZapUPI": "ZapUPI سے ادائیگی کریں",
+    "Scan QR code or click Pay Now": "QR کوڈ اسکین کریں یا Pay Now دبائیں",
+    "Waiting for payment…": "ادائیگی کا انتظار ہے…",
+    "Payment Successful! Redirecting…": "ادائیگی کامیاب! ری ڈائریکٹ ہو رہا ہے…",
+    "Failed to initiate payment with ZapUPI.": "ZapUPI سے ادائیگی شروع کرنے میں ناکامی۔",
+    "Payment already initiated for this invoice. Please try again later.": "اس انوائس کی ادائیگی پہلے سے شروع ہو چکی ہے۔",
+    "Unable to create ZapUPI order. Please try again.": "ZapUPI آرڈر نہیں بن سکا۔ دوبارہ کوشش کریں۔",
+    "Failed to create ZapUPI payment.": "ZapUPI ادائیگی بنانے میں ناکامی۔",
+    "Unable to create ZapUPI order.": "ZapUPI آرڈر بنانے سے قاصر۔",
+    "Payment details are missing.": "ادائیگی کی تفصیلات غائب ہیں۔",
+    "Unable to verify payment status.": "ادائیگی کی حالت تصدیق نہیں ہو سکی۔",
+    "Order not found.": "آرڈر نہیں ملا۔",
+    "Payment not completed.": "ادائیگی مکمل نہیں ہوئی۔",
+    "Payment processed successfully.": "ادائیگی کامیابی سے مکمل۔"
+}

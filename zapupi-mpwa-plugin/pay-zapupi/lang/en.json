@@ -1,0 +1,18 @@
+{
+    "Amount": "Amount",
+    "ZapUPI Payment": "ZapUPI Payment",
+    "Pay with ZapUPI": "Pay with ZapUPI",
+    "Scan QR code or click Pay Now": "Scan QR code or click Pay Now",
+    "Waiting for payment…": "Waiting for payment…",
+    "Payment Successful! Redirecting…": "Payment Successful! Redirecting…",
+    "Failed to initiate payment with ZapUPI.": "Failed to initiate payment with ZapUPI.",
+    "Payment already initiated for this invoice. Please try again later.": "Payment already initiated for this invoice. Please try again later.",
+    "Unable to create ZapUPI order. Please try again.": "Unable to create ZapUPI order. Please try again.",
+    "Failed to create ZapUPI payment.": "Failed to create ZapUPI payment.",
+    "Unable to create ZapUPI order.": "Unable to create ZapUPI order.",
+    "Payment details are missing.": "Payment details are missing.",
+    "Unable to verify payment status.": "Unable to verify payment status.",
+    "Order not found.": "Order not found.",
+    "Payment not completed.": "Payment not completed.",
+    "Payment processed successfully.": "Payment processed successfully."
+}

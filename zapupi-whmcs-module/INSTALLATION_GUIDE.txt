@@ -1,0 +1,32 @@
+ZapUPI WHMCS Gateway Installation Guide
+
+1. Upload Files
+- Upload modules folder into your WHMCS root directory.
+
+2. File Structure
+/modules/gateways/zapupi.php
+/modules/gateways/callback/zapupi.php
+
+3. Activate Gateway
+WHMCS Admin > Setup > Payments > Payment Gateways
+Activate: ZapUPI Gateway
+
+4. Enter API Key
+Paste your ZapUPI API Key.
+
+5. Webhook URL
+Set this URL in ZapUPI Dashboard:
+
+https://YOURDOMAIN.com/modules/gateways/callback/zapupi.php
+
+Example:
+https://mydomain.com/modules/gateways/callback/zapupi.php
+
+6. Test Payment
+Open invoice and select ZapUPI Gateway.
+
+Features:
+- QR Payment
+- Auto Payment Detection
+- WHMCS Auto Invoice Mark Paid
+- Duplicate Order Protection

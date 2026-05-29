@@ -1,0 +1,14 @@
+{
+  "name": "ZapUPI Payment",
+  "slug": "pay-zapupi",
+  "version": "1.0.0",
+  "description": "ZapUPI payment gateway India's fastest platform for secure QR and UPI payments",
+  "author": "ZapUPI Gateway Official",
+  "website": "https://zapupi.com",
+  "official": "1",
+  "compatibility": "1.0.0",
+  "entry": "PluginServiceProvider",
+  "requires": [
+    "billing"
+  ]
+}
